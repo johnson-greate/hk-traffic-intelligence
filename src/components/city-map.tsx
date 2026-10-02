@@ -13,6 +13,7 @@ import {
   type LngLat,
   type MapGeoJSONFeature,
   type MapMouseEvent,
+  type SkySpecification,
   type StyleSpecification,
 } from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
@@ -55,6 +56,18 @@ const OPENING = {
   zoom: 12.55,
   pitch: 58,
   bearing: -20,
+}
+
+// A pitched camera shows the horizon. Without a sky the space above it is empty
+// black; this fills it with a night gradient in the HUD's cyan, hazing into the city.
+const SKY: SkySpecification = {
+  "sky-color": "#03111c",
+  "horizon-color": "#1f6f8b",
+  "fog-color": "#0a2433",
+  "sky-horizon-blend": 0.7,
+  "horizon-fog-blend": 0.6,
+  "fog-ground-blend": 0.4,
+  "atmosphere-blend": 0,
 }
 
 function narrowScreen(): boolean {
@@ -391,6 +404,8 @@ export function CityMap({
     const cards = popupOpener(map)
     closeCardRef.current = cards.close
     const restoreOverlays = () => {
+      // setStyle drops the sky with the rest of the style, so it comes back here too.
+      map.setSky(SKY)
       mountDataLayers(map)
       bindOverlayClicks(map, cards.show, copyRef, approachesRef, mtrRef, lrtRef)
       holdDataCreditOpen(map)
