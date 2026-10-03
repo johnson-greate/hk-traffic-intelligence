@@ -6,6 +6,7 @@ import { useI18n } from "@/components/locale"
 import { boundaryGlance } from "@/lib/control-points"
 import { bestCrossings } from "@/lib/crossings"
 import { displayText, formatClock, LOCALE_MARK, LOCALES, type Messages } from "@/lib/i18n"
+import { CHANGELOG, changelogText } from "@/lib/changelog"
 import { INTEL_TABS, intelBoard, type IntelItem, type IntelTab } from "@/lib/intel"
 import { formatSpeed } from "@/lib/speed"
 import type { ApproachesResponse, HarbourJourney, TrafficResponse, WeatherConditions, WeatherWarning } from "@/lib/types"
@@ -190,6 +191,14 @@ export function OpsHud(props: OpsHudProps) {
           </div>
           <button
             type="button"
+            aria-expanded={open && tab === "notes"}
+            onClick={() => show("notes", undefined)}
+            className="shrink-0 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50"
+          >
+            {m.changelog}
+          </button>
+          <button
+            type="button"
             aria-expanded={barOpen}
             onClick={() => setBarOpen(false)}
             className="ml-auto shrink-0 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
@@ -309,7 +318,13 @@ export function OpsHud(props: OpsHudProps) {
               <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.14em] text-cyan-100/70 uppercase">
                 {tabLabel(tab, m)}
               </span>
-              <IntelMarquee items={intel} empty={emptyCopy(tab, m)} seconds={marqueeSeconds} onFocus={props.onFocus} />
+              {tab === "notes" ? (
+                <p className="min-w-0 flex-1 truncate text-sm text-zinc-200">
+                  {CHANGELOG[0] ? changelogText(CHANGELOG[0], locale) : m.changelog}
+                </p>
+              ) : (
+                <IntelMarquee items={intel} empty={emptyCopy(tab, m)} seconds={marqueeSeconds} onFocus={props.onFocus} />
+              )}
               {urgentCount > 0 ? (
                 <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-[#FF5D73] uppercase">{urgentCount}</span>
               ) : null}
@@ -332,7 +347,9 @@ export function OpsHud(props: OpsHudProps) {
             aria-labelledby={`intel-tab-${tab}`}
             className="intel-scroll max-h-[min(26rem,46dvh)] overflow-y-auto border-t border-white/10 px-2 py-2"
           >
-            {intel.length === 0 ? (
+            {tab === "notes" ? (
+              <ChangelogList />
+            ) : intel.length === 0 ? (
               <p className="px-1 py-2 text-sm text-zinc-300">{emptyCopy(tab, m)}</p>
             ) : (
               <ol className="flex flex-col gap-1">
@@ -366,6 +383,37 @@ function Metric(props: { label: string; value: string; tone: string; hint?: stri
   )
 }
 
+function ChangelogList() {
+  const { locale, messages: m } = useI18n()
+  const kind = {
+    added: m.changelogAdded,
+    fixed: m.changelogFixed,
+    improved: m.changelogImproved,
+  }
+  return (
+    <ol className="flex flex-col gap-2">
+      {CHANGELOG.map((entry) => (
+        <li key={entry.id} className="border border-white/10 bg-black/20 px-2 py-1.5">
+          <p className="flex flex-wrap items-center gap-2 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.08em] text-cyan-100/80 uppercase">
+            <time dateTime={entry.date}>{changelogDay(entry.date, locale)}</time>
+            <span className="text-cyan-50">{kind[entry.kind]}</span>
+          </p>
+          <p className="mt-1 text-sm leading-5 text-zinc-100">{changelogText(entry, locale)}</p>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function changelogDay(date: string, locale: ReturnType<typeof useI18n>["locale"]): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(Date.parse(`${date}T00:00:00+08:00`))
+}
+
 function tabLabel(id: IntelTab, m: Messages): string {
   switch (id) {
     case "ranked":
@@ -378,6 +426,8 @@ function tabLabel(id: IntelTab, m: Messages): string {
       return m.weather
     case "systems":
       return m.systems
+    case "notes":
+      return m.changelog
     default: {
       const exhaustive: never = id
       return exhaustive
@@ -487,6 +537,8 @@ function emptyCopy(tab: IntelTab, m: ReturnType<typeof useI18n>["messages"]): st
       return m.emptyWeather
     case "systems":
       return m.emptySystems
+    case "notes":
+      return m.changelog
     default: {
       const exhaustive: never = tab
       return exhaustive

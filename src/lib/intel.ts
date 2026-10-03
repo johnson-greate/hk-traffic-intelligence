@@ -18,9 +18,9 @@ export type IntelItem = {
   coordinates: [number, number] | null
 }
 
-export type IntelTab = "ranked" | "roads" | "boundary" | "weather" | "systems"
+export type IntelTab = "ranked" | "roads" | "boundary" | "weather" | "systems" | "notes"
 
-export const INTEL_TABS: readonly IntelTab[] = ["ranked", "roads", "boundary", "weather", "systems"]
+export const INTEL_TABS: readonly IntelTab[] = ["ranked", "roads", "boundary", "weather", "systems", "notes"]
 
 export type IntelInput = {
   trafficError: string | null
@@ -65,6 +65,7 @@ export function intelBoard(input: IntelInput, m: Messages): Record<IntelTab, Int
     boundary: boundaryOf(input, m),
     weather: weatherOf(input, warnings, m),
     systems: [...faults].sort(byScore),
+    notes: [],
   }
 }
 

@@ -62,6 +62,10 @@ export type Messages = {
   ranked: string
   roads: string
   systems: string
+  changelog: string
+  changelogAdded: string
+  changelogFixed: string
+  changelogImproved: string
   hide: string
   intel: string
   emptyRanked: string
@@ -226,6 +230,10 @@ const en: Messages = {
   ranked: "Ranked",
   roads: "Roads",
   systems: "Systems",
+  changelog: "Updates",
+  changelogAdded: "Added",
+  changelogFixed: "Fixed",
+  changelogImproved: "Improved",
   hide: "Hide",
   intel: "Intel",
   emptyRanked: "Nothing urgent on the roads, boundary, or weather.",
@@ -390,6 +398,10 @@ const zhHK: Messages = {
   ranked: "優先",
   roads: "道路",
   systems: "系統",
+  changelog: "更新",
+  changelogAdded: "新增",
+  changelogFixed: "修正",
+  changelogImproved: "改進",
   hide: "收起",
   intel: "情報",
   emptyRanked: "道路、管制站及天氣暫無須優先處理的項目。",
@@ -551,6 +563,10 @@ const zhCN: Messages = {
   ranked: "优先",
   roads: "道路",
   systems: "系统",
+  changelog: "更新",
+  changelogAdded: "新增",
+  changelogFixed: "修正",
+  changelogImproved: "改进",
   hide: "收起",
   intel: "情报",
   emptyRanked: "道路、管制站及天气暂无须优先处理的项目。",
