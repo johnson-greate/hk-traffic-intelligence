@@ -1,3 +1,4 @@
+import { gmbDestination } from "@/lib/gmb-destinations"
 import { gmbStop, gmbStopsWithin } from "@/lib/gmb-reach"
 import { kmbReachMetres } from "@/lib/kmb-reach"
 import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
@@ -20,6 +21,7 @@ type EtaEntry = {
 
 type EtaRoute = {
   route_id?: number
+  route_seq?: number
   enabled?: boolean
   eta?: EtaEntry[] | null
 }
@@ -90,28 +92,29 @@ function callsAt(rows: EtaRoute[], ids: Record<string, string>, now: number): Gm
     if (row.enabled === false || row.route_id == null) continue
     const route = ids[String(row.route_id)]
     if (!route) continue
+    const dest = gmbDestination(row.route_id, row.route_seq ?? 0)
     const entry = (row.eta ?? []).find((item) => item.eta_seq === 1) ?? row.eta?.[0]
-    if (!entry) continue
-    const etaMs = entry.timestamp ? Date.parse(entry.timestamp) : NaN
+    const etaMs = entry?.timestamp ? Date.parse(entry.timestamp) : NaN
     const hasEta = Number.isFinite(etaMs)
     const minutes = hasEta
       ? Math.max(0, Math.round((etaMs - now) / 60_000))
-      : typeof entry.diff === "number" && Number.isFinite(entry.diff)
+      : typeof entry?.diff === "number" && Number.isFinite(entry.diff)
         ? Math.max(0, entry.diff)
         : null
-    if (!hasEta && minutes == null && !text(entry.remarks_tc) && !text(entry.remarks_en)) continue
+    if (!entry && !dest) continue
+    if (entry && !hasEta && minutes == null && !dest && !text(entry.remarks_tc) && !text(entry.remarks_en)) continue
     const call: GmbCall = {
       route,
-      destTc: "",
-      destEn: "",
+      destTc: dest?.tc ?? "",
+      destEn: dest?.en ?? "",
       eta: hasEta ? new Date(etaMs).toISOString() : "",
       minutes,
       scheduled: false,
-      remarkTc: text(entry.remarks_tc),
-      remarkEn: text(entry.remarks_en),
+      remarkTc: text(entry?.remarks_tc),
+      remarkEn: text(entry?.remarks_en),
     }
-    const current = soonest.get(route)
-    if (!current || (call.minutes ?? 999) < (current.minutes ?? 999)) soonest.set(route, call)
+    const current = soonest.get(String(row.route_id))
+    if (!current || (call.minutes ?? 999) < (current.minutes ?? 999)) soonest.set(String(row.route_id), call)
   }
   return [...soonest.values()].sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999) || a.route.localeCompare(b.route, undefined, { numeric: true })).slice(0, 12)
 }
