@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "for f in src/lib/*.test.ts; do echo \"$f\"; node \"$f\" || exit 1; done",
     "dev:vinext": "vite dev --port 4318",
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
