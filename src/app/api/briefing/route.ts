@@ -18,15 +18,18 @@ type BriefingResponse =
 
 const memory = new Map<number, BriefingResponse>()
 
+type Env = Record<string, unknown> & { SELF?: { fetch: (request: Request) => Promise<Response> } }
+
 export async function GET(request: Request) {
-  const keys = await providerKeys()
+  const env = await workerEnv()
+  const keys = providerKeys(env)
   // Not configured is a normal state for a deployment without AI, so it is not an HTTP error.
   if (!keys.deepseek && !keys.anthropic) return json({ ok: false, error: "No AI provider key is set" }, 200, "public, max-age=300")
   const window = Math.floor(Date.now() / WINDOW_MS)
   const kept = memory.get(window) ?? (await readShared(window))
   if (kept) return json(kept)
   try {
-    const facts = briefingFacts(await gatherFacts(request))
+    const facts = briefingFacts(await gatherFacts(feedLoader(env, new URL(request.url).origin)))
     const written = await writeBriefing(facts, keys)
     const body: BriefingResponse = { ok: true, at: new Date().toISOString(), ...written }
     memory.clear()
@@ -38,8 +41,21 @@ export async function GET(request: Request) {
   }
 }
 
-// Calls the site's own routes in-process, so the briefing reads the same feeds and cache as the map.
-async function gatherFacts(request: Request): Promise<BriefingInput> {
+// On Cloudflare each feed is read through the SELF binding, one request each: read in-process,
+// the four feeds together passed the free plan's 50 subrequests per invocation on a cold cache.
+// The Node dev server has no binding, so it calls the routes directly.
+function feedLoader(env: Env, origin: string): (path: string) => Promise<Response> {
+  const self = env.SELF
+  if (self) return (path) => self.fetch(new Request(`${origin}${path}`))
+  return (path) => {
+    if (path.startsWith("/api/traffic")) return getTraffic(new Request(`${origin}${path}`))
+    if (path.startsWith("/api/approaches")) return getApproaches()
+    if (path.startsWith("/api/incidents")) return getIncidents()
+    return getWarnings(new Request(`${origin}${path}`))
+  }
+}
+
+async function gatherFacts(load: (path: string) => Promise<Response>): Promise<BriefingInput> {
   const read = async <T,>(pending: Promise<Response>): Promise<T | null> => {
     try {
       const response = await pending
@@ -48,12 +64,11 @@ async function gatherFacts(request: Request): Promise<BriefingInput> {
       return null
     }
   }
-  const origin = new URL(request.url).origin
   const [traffic, approaches, incidents, warnings] = await Promise.all([
-    read<TrafficResponse>(getTraffic(new Request(`${origin}/api/traffic`))),
-    read<ApproachesResponse>(getApproaches()),
-    read<IncidentsResponse>(getIncidents()),
-    read<WarningsResponse>(getWarnings(new Request(`${origin}/api/warnings?lang=en`))),
+    read<TrafficResponse>(load("/api/traffic")),
+    read<ApproachesResponse>(load("/api/approaches")),
+    read<IncidentsResponse>(load("/api/incidents")),
+    read<WarningsResponse>(load("/api/warnings?lang=en")),
   ])
   return {
     at: new Date(),
@@ -68,14 +83,16 @@ async function gatherFacts(request: Request): Promise<BriefingInput> {
   }
 }
 
-// Cloudflare secrets in the Worker; .env under the Node dev server.
-async function providerKeys(): Promise<BriefingKeys> {
-  let env: Record<string, unknown> = {}
+async function workerEnv(): Promise<Env> {
   try {
-    env = (await import(/* turbopackIgnore: true */ /* webpackIgnore: true */ "cloudflare:workers")).env
+    return (await import(/* turbopackIgnore: true */ /* webpackIgnore: true */ "cloudflare:workers")).env as Env
   } catch {
-    // Not running in workerd.
+    return {} // Not running in workerd.
   }
+}
+
+// Cloudflare secrets in the Worker; .env under the Node dev server.
+function providerKeys(env: Env): BriefingKeys {
   const pick = (name: string) => {
     const value = env[name] ?? process.env[name]
     return typeof value === "string" && value.length > 0 ? value : undefined
