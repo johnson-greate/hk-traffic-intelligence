@@ -1,3 +1,4 @@
+import { ferryFairway } from "@/lib/ferry-fairway"
 import { ferryInstant } from "@/lib/ferry-clock"
 import { metresBetween, type GeoPoint } from "@/lib/mtr-estimate"
 import type { FerryVessel } from "@/lib/types"
@@ -37,21 +38,66 @@ export function placeFerry(
   arriveAt: number | null,
   now: number,
 ): { lng: number; lat: number; minutes: number } | null {
-  const model = to ? ferryCrossingMs(metresBetween(from, to)) : null
+  return placeOnPath(to ? [from, to] : [from], departAt, arriveAt, now)
+}
+
+export function placeOnPath(
+  path: readonly GeoPoint[],
+  departAt: number | null,
+  arriveAt: number | null,
+  now: number,
+): { lng: number; lat: number; minutes: number } | null {
+  const origin = path[0]
+  if (!origin) return null
+  const length = pathMetres(path)
+  const model = path.length >= 2 && length > 0 ? ferryCrossingMs(length) : null
   const window = sailingWindow(departAt, arriveAt, model)
   if (!window) return null
   if (now > window.end + 2 * 60_000) return null
   // A later sailing stays on the pier card. The boat is drawn once it is due to leave.
   if (now < window.start && window.start - now > 30 * 60_000) return null
   const minutes = Math.max(0, Math.round((window.end - now) / 60_000))
-  if (now <= window.start || !to) return { lng: from.lng, lat: from.lat, minutes }
+  if (now <= window.start || path.length < 2) return { lng: origin.lng, lat: origin.lat, minutes }
   const span = window.end - window.start
   const mix = span <= 0 ? 1 : Math.min(1, Math.max(0, (now - window.start) / span))
-  return {
-    lng: from.lng + (to.lng - from.lng) * mix,
-    lat: from.lat + (to.lat - from.lat) * mix,
-    minutes,
+  const point = pointAlong(path, mix)
+  return { lng: point.lng, lat: point.lat, minutes }
+}
+
+export function pathMetres(path: readonly GeoPoint[]): number {
+  let total = 0
+  for (let index = 1; index < path.length; index += 1) {
+    const previous = path[index - 1]
+    const next = path[index]
+    if (!previous || !next) continue
+    total += metresBetween(previous, next)
   }
+  return total
+}
+
+export function pointAlong(path: readonly GeoPoint[], fraction: number): GeoPoint {
+  const origin = path[0]
+  if (!origin) return { lng: 0, lat: 0 }
+  if (path.length === 1 || fraction <= 0) return origin
+  const last = path[path.length - 1]
+  if (!last || fraction >= 1) return last ?? origin
+  const target = pathMetres(path) * fraction
+  let walked = 0
+  for (let index = 1; index < path.length; index += 1) {
+    const previous = path[index - 1]
+    const next = path[index]
+    if (!previous || !next) continue
+    const step = metresBetween(previous, next)
+    if (walked + step >= target && step > 0) {
+      const mix = (target - walked) / step
+      return {
+        lng: previous.lng + (next.lng - previous.lng) * mix,
+        lat: previous.lat + (next.lat - previous.lat) * mix,
+      }
+    }
+    walked += step
+  }
+  return last
 }
 
 export function estimateFerryVessels(
@@ -73,9 +119,10 @@ export function estimateFerryVessels(
     const departAt = arriveAt == null
       ? departures.find((time) => time >= now - 2 * 60_000) ?? departures[departures.length - 1] ?? null
       : [...departures].reverse().find((time) => time < arriveAt) ?? null
-    const place = placeFerry(from, to, departAt, arriveAt, now)
+    const path = to ? ferryFairway(track.fromId, track.toId, from, to) : [from]
+    const place = placeOnPath(path, departAt, arriveAt, now)
     if (!place) continue
-    const end = sailingWindow(departAt, arriveAt, to ? ferryCrossingMs(metresBetween(from, to)) : null)?.end
+    const end = sailingWindow(departAt, arriveAt, path.length >= 2 ? ferryCrossingMs(pathMetres(path)) : null)?.end
     vessels.push({
       id: `run-${track.route}-${track.fromId}`,
       nameTc: `${track.fromTc} – ${track.toTc}`,
@@ -94,6 +141,8 @@ export function estimateFerryVessels(
       toLat: to?.lat ?? from.lat,
       departAt,
       arriveAt,
+      pathLng: path.map((point) => point.lng),
+      pathLat: path.map((point) => point.lat),
     })
   }
   return vessels
@@ -141,6 +190,8 @@ export type FerryMotion = {
   fromLat: number
   toLng: number
   toLat: number
+  pathLng: number[]
+  pathLat: number[]
   departAt: number | null
   arriveAt: number | null
 }
@@ -173,10 +224,14 @@ export function syncFerryMotion(previous: readonly FerryMotion[], vessels: reado
         fromLat: vessel.lat,
         toLng: vessel.lng,
         toLat: vessel.lat,
+        pathLng: [vessel.lng],
+        pathLat: [vessel.lat],
         departAt: null,
         arriveAt: null,
       }
     }
+    const pathLng = vessel.pathLng ?? [vessel.fromLng ?? vessel.lng, vessel.toLng ?? vessel.lng]
+    const pathLat = vessel.pathLat ?? [vessel.fromLat ?? vessel.lat, vessel.toLat ?? vessel.lat]
     return {
       id: vessel.id,
       fix: "clock",
@@ -196,6 +251,8 @@ export function syncFerryMotion(previous: readonly FerryMotion[], vessels: reado
       fromLat: vessel.fromLat ?? vessel.lat,
       toLng: vessel.toLng ?? vessel.lng,
       toLat: vessel.toLat ?? vessel.lat,
+      pathLng,
+      pathLat,
       departAt: vessel.departAt ?? null,
       arriveAt: vessel.arriveAt ?? null,
     }
@@ -207,14 +264,8 @@ export function ferryMotionPoint(motion: FerryMotion, now: number): { lng: numbe
     const age = Math.max(0, Math.min(GPS_COAST_MS, now - motion.gpsAt))
     return { lng: motion.gpsLng + motion.east * age, lat: motion.gpsLat + motion.north * age, minutes: motion.minutes }
   }
-  const samePier = motion.toLng === motion.fromLng && motion.toLat === motion.fromLat
-  return placeFerry(
-    { lng: motion.fromLng, lat: motion.fromLat },
-    samePier ? null : { lng: motion.toLng, lat: motion.toLat },
-    motion.departAt,
-    motion.arriveAt,
-    now,
-  )
+  const path = motion.pathLng.map((lng, index) => ({ lng, lat: motion.pathLat[index] ?? motion.fromLat }))
+  return placeOnPath(path.length > 0 ? path : [{ lng: motion.fromLng, lat: motion.fromLat }], motion.departAt, motion.arriveAt, now)
 }
 
 export function ferryMotionFeatures(motions: readonly FerryMotion[], now: number): GeoJSON.FeatureCollection {

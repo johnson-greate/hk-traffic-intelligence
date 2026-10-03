@@ -310,6 +310,8 @@ export type FerryVessel = {
   toLat?: number
   departAt?: number | null
   arriveAt?: number | null
+  pathLng?: number[]
+  pathLat?: number[]
 }
 
 export type FerryResponse = {
