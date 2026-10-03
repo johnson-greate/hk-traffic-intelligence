@@ -1,3 +1,5 @@
+import { openFeedCache } from "@/lib/feed-cache"
+
 type UpstreamBody = { status: number; body: ArrayBuffer; contentType: string }
 
 type UpstreamOptions = {
@@ -55,7 +57,7 @@ async function readThrough(url: string, ttlMs: number, options: UpstreamOptions)
 }
 
 async function readShared(url: string, ttlMs: number): Promise<UpstreamBody | null> {
-  const cache = await openCache()
+  const cache = await openFeedCache()
   if (!cache) return null
   try {
     const cached = await cache.match(new Request(url))
@@ -67,7 +69,7 @@ async function readShared(url: string, ttlMs: number): Promise<UpstreamBody | nu
 }
 
 async function writeShared(url: string, ttlMs: number, body: UpstreamBody): Promise<void> {
-  const cache = await openCache()
+  const cache = await openFeedCache()
   if (!cache) return
   const seconds = Math.max(1, Math.round(ttlMs / 1000))
   try {
@@ -94,17 +96,6 @@ async function remember(url: string, ttlMs: number, response: Response): Promise
   }
   memory.set(url, { expires: Date.now() + ttlMs, body })
   return body
-}
-
-async function openCache(): Promise<Cache | null> {
-  const storage = globalThis.caches as (CacheStorage & { default?: Cache }) | undefined
-  if (!storage) return null
-  if (storage.default) return storage.default
-  try {
-    return await storage.open("hktraffic-feeds")
-  } catch {
-    return null
-  }
 }
 
 function rawFetch(): typeof fetch {

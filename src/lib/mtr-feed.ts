@@ -1,3 +1,4 @@
+import { openFeedCache } from "@/lib/feed-cache"
 import { carryArrivalClock, estimateTrains, type TrainObservation } from "@/lib/mtr-estimate"
 import { pool } from "@/lib/pool"
 import { nextStationSlice } from "@/lib/refresh-slice"
@@ -88,7 +89,7 @@ export async function loadMtrSnapshot(now = Date.now()): Promise<MtrResponse> {
 }
 
 async function readSharedMemory(now: number): Promise<void> {
-  const cache = await openCache()
+  const cache = await openFeedCache()
   if (!cache) return
   try {
     const hit = await cache.match(new Request(MEMORY_URL))
@@ -106,7 +107,7 @@ async function readSharedMemory(now: number): Promise<void> {
 }
 
 async function writeSharedMemory(now: number): Promise<void> {
-  const cache = await openCache()
+  const cache = await openFeedCache()
   if (!cache) return
   const stations: SavedMemory["stations"] = []
   for (const [key, item] of remembered) {
@@ -122,17 +123,6 @@ async function writeSharedMemory(now: number): Promise<void> {
     )
   } catch {
     // The next request still has this worker's own copy.
-  }
-}
-
-async function openCache(): Promise<Cache | null> {
-  const storage = globalThis.caches as (CacheStorage & { default?: Cache }) | undefined
-  if (!storage) return null
-  if (storage.default) return storage.default
-  try {
-    return await storage.open("hktraffic-feeds")
-  } catch {
-    return null
   }
 }
 
