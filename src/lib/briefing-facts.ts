@@ -22,13 +22,15 @@ const TUNNEL: Record<string, string> = {
 
 // Below this a "jam" is usually one short segment at a junction.
 const MIN_JAM_KM = 0.5
+// The feed sometimes grades a segment congested while it reads 84 km/h; that is not a jam.
+const MAX_JAM_KMH = 40
 const HK_OFFSET_MS = 8 * 3_600_000
 
 // Congested segments grouped by road, longest stretch first.
 export function jammedRoads(corridors: Corridor[], limit: number): JammedRoad[] {
   const roads = new Map<string, JammedRoad>()
   for (const corridor of corridors) {
-    if (corridor.band !== "congested" || !corridor.roadTc || corridor.speedKmh == null) continue
+    if (corridor.band !== "congested" || !corridor.roadTc || corridor.speedKmh == null || corridor.speedKmh > MAX_JAM_KMH) continue
     const road = roads.get(corridor.roadTc) ?? { tc: corridor.roadTc, en: englishName(corridor.roadEn), km: 0, slowestKmh: Infinity }
     road.km += corridor.lengthKm
     road.slowestKmh = Math.min(road.slowestKmh, corridor.speedKmh)
@@ -54,7 +56,8 @@ export function briefingFacts(input: BriefingInput): string {
       ? `Harbour crossings, fastest published time from any start: ${input.crossings.map((row) => `${TUNNEL[row.code] ?? row.code} ${row.minutes} min`).join(", ")}`
       : "Harbour crossings: no reading",
   )
-  const jams = input.traffic?.ok ? jammedRoads(input.traffic.corridors, 5) : []
+  // Three is enough to read; five made the English run past the length check.
+  const jams = input.traffic?.ok ? jammedRoads(input.traffic.corridors, 3) : []
   lines.push(
     jams.length > 0
       ? `Congested roads, longest first: ${jams.map((road) => `${road.tc} ${road.en} ${road.km} km, slowest ${road.slowestKmh} km/h`).join("; ")}`

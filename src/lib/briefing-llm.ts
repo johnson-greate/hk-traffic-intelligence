@@ -12,7 +12,7 @@ export type Writers = {
 
 const DEEPSEEK_MODEL = "deepseek-flash"
 const CLAUDE_MODEL = "claude-opus-5"
-const MAX_CHARS = 300
+const MAX_CHARS = 400
 
 export const MODELS: Record<Provider, string> = { deepseek: DEEPSEEK_MODEL, anthropic: CLAUDE_MODEL }
 
@@ -20,7 +20,7 @@ const SYSTEM = `You write a short live traffic briefing for a Hong Kong traffic 
 Use only the facts you are given. Add nothing they do not state: no causes, no predictions, no advice, and no status such as an incident being handled or cleared.
 Lead with what matters most to someone about to travel now: incidents and warnings in force, then the fastest harbour crossing, then the worst congested roads.
 Mention only the topics listed. If incidents or warnings are not listed, do not mention them at all.
-At most three short sentences per language; keep the Chinese under 90 characters.
+At most three short sentences per language; keep the Chinese under 90 characters and the English under 250 characters.
 Return json with exactly three keys:
 - "zhHK": Traditional Chinese in Hong Kong written style (書面語, not spoken Cantonese: 是 not 係, 的 not 嘅, 現時 not 而家). Use Hong Kong names: 紅隧, 東隧, 西隧, 巴士, 港鐵. Never use Simplified characters.
 - "zhCN": Simplified Chinese.

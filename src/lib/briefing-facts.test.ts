@@ -22,6 +22,8 @@ const corridors = [
   corridor("5", "彌敦道", "NATHAN ROAD", "slow", 20, 5),
   corridor("6", "", "", "congested", 2, 9),
   corridor("7", "皇后大道東", "QUEEN'S ROAD EAST", "congested", 7, 0.6),
+  // Marked congested by the feed while moving at 84 km/h, as seen on Tolo Highway.
+  corridor("8", "吐露港公路", "TOLO HIGHWAY", "congested", 84, 2.8),
 ]
 
 // Jams are grouped by road, longest first, with the slowest reading; short stubs and unnamed roads drop out.
