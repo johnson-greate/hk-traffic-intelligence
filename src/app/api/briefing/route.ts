@@ -20,7 +20,8 @@ const memory = new Map<number, BriefingResponse>()
 
 export async function GET(request: Request) {
   const keys = await providerKeys()
-  if (!keys.deepseek && !keys.anthropic) return json({ ok: false, error: "No AI provider key is set" }, 503)
+  // Not configured is a normal state for a deployment without AI, so it is not an HTTP error.
+  if (!keys.deepseek && !keys.anthropic) return json({ ok: false, error: "No AI provider key is set" }, 200, "public, max-age=300")
   const window = Math.floor(Date.now() / WINDOW_MS)
   const kept = memory.get(window) ?? (await readShared(window))
   if (kept) return json(kept)
@@ -112,6 +113,6 @@ async function writeShared(window: number, body: BriefingResponse): Promise<void
   }
 }
 
-function json(body: BriefingResponse, status = 200) {
-  return Response.json(body, { status, headers: { "Cache-Control": status === 200 ? "public, max-age=60" : "no-store" } })
+function json(body: BriefingResponse, status = 200, cache = status === 200 ? "public, max-age=60" : "no-store") {
+  return Response.json(body, { status, headers: { "Cache-Control": cache } })
 }

@@ -9,14 +9,14 @@ assert.deepEqual(parseBriefing("```json\n" + good + "\n```")?.en, "The Eastern H
 assert.equal(parseBriefing(""), null)
 assert.equal(parseBriefing("not json"), null)
 assert.equal(parseBriefing(JSON.stringify({ zhHK: "ok", zhCN: "", en: "ok" })), null)
-assert.equal(parseBriefing(JSON.stringify({ zhHK: "x".repeat(400), zhCN: "ok", en: "ok" })), null)
+assert.equal(parseBriefing(JSON.stringify({ zhHK: "x".repeat(401), zhCN: "ok", en: "ok" })), null)
 
 // The reason is kept, so a failure in production says what was wrong.
 assert.equal(briefingProblem(good), null)
 assert.equal(briefingProblem(""), "empty answer")
 assert.equal(briefingProblem("not json"), "not JSON")
 assert.equal(briefingProblem(JSON.stringify({ zhHK: "ok", en: "ok" })), "zhCN empty")
-assert.equal(briefingProblem(JSON.stringify({ zhHK: "ok", zhCN: "ok", en: "x".repeat(301) })), "en too long (301)")
+assert.equal(briefingProblem(JSON.stringify({ zhHK: "ok", zhCN: "ok", en: "x".repeat(401) })), "en too long (401)")
 
 const calls: string[] = []
 const writers = (deepseek: () => Promise<string>, anthropic: () => Promise<string>): Writers => ({
