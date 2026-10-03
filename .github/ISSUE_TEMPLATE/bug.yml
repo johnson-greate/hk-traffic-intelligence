@@ -1,0 +1,49 @@
+name: 🐛 報告問題
+description: 有東西壞了、顯示錯誤，或者運行不到
+title: "[問題] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: 多謝回報！寫得越具體，老師越快找到問題。截圖可以直接拖入下面的文字框。
+  - type: textarea
+    id: steps
+    attributes:
+      label: 你做了甚麼？
+      description: 一步一步寫，讓別人可以照做一次。
+      placeholder: |
+        1. 打開 http://localhost:4317
+        2. 按頂部的「紅隧」
+        3. 起點選「東區走廊西行近鯉景灣」
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 你看到甚麼？
+      description: 附上截圖會很有幫助。如有錯誤訊息，請整段貼上。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你預期會看到甚麼？
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: 在哪裏發生？
+      options:
+        - 自己電腦運行的版本（localhost:4317）
+        - 網上版（hktraffic.johnson-greate.workers.dev）
+        - 安裝或運行時（npm install / npm run dev）
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 電腦和瀏覽器
+      placeholder: 例如：MacBook Air + Chrome、Windows 11 + Edge、iPhone + Safari
+    validations:
+      required: true
