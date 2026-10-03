@@ -121,41 +121,88 @@ export function OpsHud(props: OpsHudProps) {
     const root = document.documentElement
     const apply = () => {
       const narrow = window.matchMedia("(max-width: 639px)").matches
+      const attrib = document.querySelector<HTMLElement>(".maplibregl-ctrl-attrib")
+      const attribBox = attrib?.getBoundingClientRect()
+      if (narrow && !open && attribBox && attribBox.height > 2) {
+        const clearance = Math.ceil(window.innerHeight - attribBox.top + 8)
+        root.style.setProperty("--marquee-bottom", `${clearance}px`)
+        root.style.setProperty("--dock-closed-bottom", `${clearance + 48}px`)
+      } else {
+        root.style.removeProperty("--marquee-bottom")
+        root.style.removeProperty("--dock-closed-bottom")
+      }
+      const header = document.querySelector<HTMLElement>("[data-map-chrome='top']")
       const panel = document.querySelector<HTMLElement>("[data-map-chrome='panel']")
+      const list = document.getElementById("harbour-intel-list")
+      const headerBox = header?.getBoundingClientRect()
+      const headerVisible = !!headerBox && headerBox.height > 2 && headerBox.left <= 56
+      if (open && list && panel && headerVisible && headerBox) {
+        const dock = document.querySelector<HTMLElement>("[data-layer-dock]")
+        const zoom = document.querySelector<HTMLElement>(".maplibregl-ctrl-top-left")
+        const dockBox = dock?.getBoundingClientRect()
+        const zoomBox = zoom?.getBoundingClientRect()
+        const dockH = dockBox && dockBox.height > 2 ? dockBox.height : 0
+        const zoomH = zoomBox && zoomBox.height > 2 ? zoomBox.height : 0
+        const aboveList = Math.max(0, list.getBoundingClientRect().top - panel.getBoundingClientRect().top)
+        let bottomGap = narrow ? 96 : window.innerWidth >= 1024 ? 56 : 144
+        if (narrow && attribBox && attribBox.height > 2) {
+          bottomGap = Math.max(bottomGap, Math.ceil(window.innerHeight - attribBox.top + 14))
+        }
+        if (narrow) root.style.setProperty("--intel-bottom", `${bottomGap}px`)
+        else root.style.removeProperty("--intel-bottom")
+        const minTop = Math.ceil(headerBox.bottom + (narrow ? zoomH + dockH + 28 : 8))
+        const available = window.innerHeight - bottomGap - minTop - aboveList
+        root.style.setProperty("--intel-list-max", `${Math.max(72, Math.floor(available))}px`)
+      } else {
+        root.style.removeProperty("--intel-list-max")
+        root.style.removeProperty("--intel-bottom")
+      }
       const panelBox = panel?.getBoundingClientRect()
       if (narrow && open && panelBox && panelBox.height > 80 && panelBox.top > 80) {
         root.style.setProperty("--map-dock-bottom", `${Math.ceil(window.innerHeight - panelBox.top + 8)}px`)
       } else {
         root.style.removeProperty("--map-dock-bottom")
       }
-      if (window.matchMedia("(min-width: 1024px)").matches) {
+      if (!headerVisible || !headerBox || window.matchMedia("(min-width: 1024px)").matches) {
         root.style.removeProperty("--map-control-top")
         return
       }
-      const header = document.querySelector<HTMLElement>("[data-map-chrome='top']")
-      const box = header?.getBoundingClientRect()
-      if (!box || box.height < 2 || box.left > 56) {
-        root.style.removeProperty("--map-control-top")
-        return
-      }
-      root.style.setProperty("--map-control-top", `${Math.ceil(box.bottom + 6)}px`)
+      root.style.setProperty("--map-control-top", `${Math.ceil(headerBox.bottom + 6)}px`)
     }
     apply()
     const header = document.querySelector("[data-map-chrome='top']")
     const panel = document.querySelector("[data-map-chrome='panel']")
+    const dock = document.querySelector("[data-layer-dock]")
     const observer = new ResizeObserver(apply)
+    const watchCorner = () => {
+      const corner = document.querySelector(".maplibregl-ctrl-bottom-right")
+      if (corner) observer.observe(corner)
+    }
     if (header) observer.observe(header)
     if (panel) observer.observe(panel)
+    if (dock) observer.observe(dock)
+    watchCorner()
+    const map = document.querySelector(".maplibregl-map")
+    const mutations = new MutationObserver(() => {
+      watchCorner()
+      apply()
+    })
+    if (map) mutations.observe(map, { childList: true, subtree: true })
     window.addEventListener("resize", apply)
     return () => {
       observer.disconnect()
+      mutations.disconnect()
       window.removeEventListener("resize", apply)
       root.style.removeProperty("--map-control-top")
       root.style.removeProperty("--map-dock-bottom")
+      root.style.removeProperty("--intel-list-max")
+      root.style.removeProperty("--intel-bottom")
+      root.style.removeProperty("--marquee-bottom")
+      root.style.removeProperty("--dock-closed-bottom")
     }
-  }, [barOpen, locale, open])
+  }, [barOpen, locale, open, props.mapLive])
   return (
-    <div className="pointer-events-none absolute inset-0 z-[5]">
+    <div className="@container/hud pointer-events-none absolute inset-0 z-[5]">
       {barOpen ? null : (
         <button
           type="button"
@@ -168,7 +215,7 @@ export function OpsHud(props: OpsHudProps) {
       )}
       <header
         data-map-chrome="top"
-        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-col gap-1 overflow-x-clip border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:gap-1.5 sm:px-2 sm:py-1.5 sm:flex-row sm:items-center lg:right-4 lg:left-16 ${
+        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-col gap-1 overflow-x-clip border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[52rem]/hud:flex-row @min-[52rem]/hud:items-center lg:right-4 lg:left-16 ${
           barOpen ? "" : "max-sm:hidden"
         }`}
       >
@@ -217,7 +264,7 @@ export function OpsHud(props: OpsHudProps) {
             {m.hide}
           </button>
         </div>
-        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto sm:gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:gap-1.5">
           {crossings.map((crossing) => (
             <Metric
               key={crossing.code}
@@ -256,7 +303,7 @@ export function OpsHud(props: OpsHudProps) {
           <button
             type="button"
             onClick={() => show("roads", worstRoad)}
-            className="block shrink-0 border border-white/10 bg-black/30 px-1.5 py-1 text-left sm:ml-auto sm:px-2"
+            className="block shrink-0 border border-white/10 bg-black/30 px-1 py-1 text-left sm:ml-auto sm:px-2"
             title={bandTitle(summary, m)}
           >
             <p className="font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.network}</p>
@@ -280,8 +327,8 @@ export function OpsHud(props: OpsHudProps) {
         data-map-chrome="panel"
         className={
           open
-            ? "pointer-events-auto absolute right-3 bottom-36 z-[6] w-[min(22rem,calc(100%-1.5rem))] border border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md lg:right-4 lg:bottom-14"
-            : "pointer-events-auto absolute inset-x-0 bottom-14 z-[6] border-t border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md"
+            ? "pointer-events-auto absolute right-3 bottom-[var(--intel-bottom,6rem)] z-[6] w-[min(22rem,calc(100%-1.5rem))] border border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:bottom-36 lg:right-4 lg:bottom-14"
+            : "pointer-events-auto absolute inset-x-0 bottom-[var(--marquee-bottom,3.5rem)] z-[6] border-t border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:bottom-14"
         }
       >
         <div className="flex items-center gap-1 px-1.5 py-1">
@@ -354,7 +401,7 @@ export function OpsHud(props: OpsHudProps) {
             id="harbour-intel-list"
             role="tabpanel"
             aria-labelledby={`intel-tab-${tab}`}
-            className="intel-scroll max-h-[min(26rem,46dvh)] overflow-y-auto border-t border-white/10 px-2 py-2"
+            className="intel-scroll max-h-[min(26rem,46dvh,var(--intel-list-max,100dvh))] overflow-y-auto border-t border-white/10 px-2 py-2"
           >
             {tab === "notes" ? (
               <ChangelogList />
@@ -382,7 +429,7 @@ function Metric(props: { label: string; value: string; tone: string; hint?: stri
       type="button"
       onClick={props.onClick}
       title={props.hint}
-      className={`block shrink-0 border border-white/10 bg-black/30 px-1.5 py-1 text-left sm:px-2 ${props.className ?? ""}`}
+      className={`block shrink-0 border border-white/10 bg-black/30 px-1 py-1 text-left sm:px-2 ${props.className ?? ""}`}
     >
       <p className="font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{props.label}</p>
       <p className="font-[family-name:var(--font-hud)] text-sm leading-none whitespace-nowrap tabular-nums sm:text-base" style={{ color: props.tone }}>

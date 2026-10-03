@@ -13,6 +13,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    id: "2026-10-03-phone-layout",
+    date: "2026-10-03",
+    kind: "improved",
+    en: "On a phone, the tunnel times, weather, and speed stay clear of the map buttons.",
+    tc: "在手機上，隧道時間、天氣和車速不再被地圖按鈕擋住。",
+    sc: "在手机上，隧道时间、天气和车速不再被地图按钮挡住。",
+  },
+  {
     id: "2026-10-03-ferry-channel",
     date: "2026-10-03",
     kind: "fixed",

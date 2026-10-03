@@ -103,9 +103,10 @@ export function LayerDock(props: LayerDockProps) {
   return (
     <div
       data-map-chrome="bottom"
+      data-layer-dock=""
       className={`pointer-events-auto absolute left-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-2 lg:left-16 ${
         props.aboveMarquee
-          ? "bottom-36 sm:bottom-28"
+          ? "bottom-[var(--dock-closed-bottom,9rem)] sm:bottom-28"
           : "bottom-[var(--map-dock-bottom,7rem)] sm:bottom-14 sm:max-w-[calc(100%-24rem)] lg:max-w-[calc(100%-30rem)]"
       }`}
     >
