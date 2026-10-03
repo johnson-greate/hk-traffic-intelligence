@@ -256,8 +256,8 @@ export function OpsHud(props: OpsHudProps) {
         data-map-chrome="panel"
         className={
           open
-            ? "pointer-events-auto absolute right-3 bottom-36 z-[6] w-[min(22rem,calc(100%-1.5rem))] border border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md lg:right-4 lg:bottom-14"
-            : "pointer-events-auto absolute inset-x-0 bottom-14 z-[6] border-t border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md"
+            ? "pointer-events-auto absolute right-3 bottom-36 z-[6] w-[min(22rem,calc(100%-1.5rem))] max-sm:bottom-(--layer-dock-clear,9rem) border border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md lg:right-4 lg:bottom-14"
+            : "pointer-events-auto absolute inset-x-0 bottom-14 z-[6] max-sm:bottom-(--layer-dock-clear,9rem) border-t border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md"
         }
       >
         <div className="flex items-center gap-1 px-1.5 py-1">
@@ -324,7 +324,7 @@ export function OpsHud(props: OpsHudProps) {
             id="harbour-intel-list"
             role="tabpanel"
             aria-labelledby={`intel-tab-${tab}`}
-            className="intel-scroll max-h-[min(26rem,46dvh)] overflow-y-auto border-t border-white/10 px-2 py-2"
+            className="intel-scroll max-h-[min(26rem,46dvh)] overflow-y-auto max-sm:max-h-[min(26rem,calc(100dvh-var(--layer-dock-clear,9rem)-15rem))] border-t border-white/10 px-2 py-2"
           >
             {intel.length === 0 ? (
               <p className="px-1 py-2 text-sm text-zinc-300">{emptyCopy(tab, m)}</p>
