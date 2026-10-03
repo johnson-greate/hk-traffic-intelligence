@@ -171,6 +171,36 @@
   object-position: right bottom;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(186 230 253 / 45%) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgb(186 230 253 / 45%);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(186 230 253 / 75%);
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .bar-scroll {
   scrollbar-width: none;
 }
@@ -181,28 +211,6 @@
 
 .bar-scroll::-webkit-scrollbar {
   display: none;
-}
-
-.intel-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(186 230 253 / 42%) transparent;
-}
-
-.intel-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-
-.intel-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.intel-scroll::-webkit-scrollbar-thumb {
-  background: rgb(186 230 253 / 38%);
-  border-radius: 999px;
-}
-
-.intel-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgb(186 230 253 / 68%);
 }
 
 @media (max-width: 760px) {
@@ -381,30 +389,17 @@ html[data-locale="zh-CN"] .city-card {
   flex-direction: column;
   max-height: min(42vh, 280px);
   overflow: auto;
-  padding-inline-end: 12px;
-  scrollbar-color: rgb(16 32 51 / 35%) transparent;
-  scrollbar-width: thin;
+  padding-inline-end: 2px;
+  scrollbar-color: rgb(16 32 51 / 45%) transparent;
 }
 
 .city-card-board::-webkit-scrollbar {
-  width: 8px;
-}
-
-.city-card-board::-webkit-scrollbar-button {
-  display: none;
-  height: 0;
-  width: 0;
-}
-
-.city-card-board::-webkit-scrollbar-track {
-  background: transparent;
+  width: 3px;
+  height: 3px;
 }
 
 .city-card-board::-webkit-scrollbar-thumb {
-  background-color: rgb(16 32 51 / 35%);
-  background-clip: padding-box;
-  border: 2px solid transparent;
-  border-radius: 999px;
+  background: rgb(16 32 51 / 45%);
 }
 
 .city-card-call {
