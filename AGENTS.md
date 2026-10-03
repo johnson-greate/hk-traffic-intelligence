@@ -16,6 +16,16 @@ The live worker is built only from `main`. Run `npm run deploy:vinext`. It refus
 
 Side branches are allowed. Every branch on `origin` or `github` other than `main` has one row in `docs/branches.md` saying what it is. Add the row when the branch is pushed. Remove the row when the branch is deleted. `node scripts/branch-register.mjs` prints whether the list matches the remotes.
 
+## The board
+
+One shared reading serves every visitor. Cache it. A new feature that needs its own database, cron archive, or model is the wrong feature.
+
+- Road colour is the Transport Department saturation class. Where that class is missing, the colour falls back to the live speed. Do not store speeds to invent a second "slower than usual."
+- The three harbour times on the bar come from the one sign nearest the map. Do not add another card with different minutes. Do not remember the chosen sign in the browser.
+- Ask arrival clocks only for stops the map is showing, through the shared polite queue. Do not ask for clocks for saved stops, or for stops off screen, when the page opens.
+- A hung or slow request is fixed in our code. Do not hide it with a database, a snapshot cron, or a larger CPU limit.
+- Do not add a language model, push alerts, a rain-radar layer, or a sky decoration. The numbers already on the board are the product.
+
 ## Jev
 
 Jev is TypeSafe's System One model. It does not write code or choose the next step. When a judgment is semantic and you are not sure, ask Jev, then act on the typed answer. Keep arithmetic, lookups, control flow, and side effects in code.
