@@ -11,7 +11,8 @@ export type Writers = {
 }
 
 const DEEPSEEK_MODEL = "deepseek-flash"
-const CLAUDE_MODEL = "claude-opus-5"
+// Haiku: the fallback restates a few facts, so the cheapest current model is enough.
+const CLAUDE_MODEL = "claude-haiku-4-5"
 const MAX_CHARS = 400
 
 export const MODELS: Record<Provider, string> = { deepseek: DEEPSEEK_MODEL, anthropic: CLAUDE_MODEL }
@@ -116,16 +117,13 @@ async function askDeepSeek(key: string, system: string, facts: string): Promise<
 
 async function askClaude(key: string, system: string, facts: string): Promise<string> {
   const client = new Anthropic({ apiKey: key, timeout: 30_000, maxRetries: 1 })
-  const response = await client.beta.messages.create({
+  const response = await client.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 2000,
     system,
     messages: [{ role: "user", content: facts }],
-    // A short restatement of given facts; low effort keeps it quick.
-    output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-    // On a refusal, the API reruns the request on a fallback model.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    // Haiku 4.5 takes no effort setting; the schema keeps the answer to three strings.
+    output_config: { format: { type: "json_schema", schema: SCHEMA } },
   })
   if (response.stop_reason === "refusal") throw new Error("refused")
   return response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("")
