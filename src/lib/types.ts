@@ -303,6 +303,13 @@ export type FerryVessel = {
   minutes: number | null
   destTc?: string
   destEn?: string
+  fix: "gps" | "clock"
+  fromLng?: number
+  fromLat?: number
+  toLng?: number
+  toLat?: number
+  departAt?: number | null
+  arriveAt?: number | null
 }
 
 export type FerryResponse = {

@@ -41,7 +41,8 @@ import { GMB_MIN_ZOOM, KMB_MIN_ZOOM, kmbViewKey } from "@/lib/kmb-view"
 import { displayText, type Locale, type Messages } from "@/lib/i18n"
 import { lineRecord, mtrStationCollection, mtrTrackCollection, stationPoint, stationRecord } from "@/lib/mtr-network"
 import { lrtColor, lrtPoint, lrtRoutesThrough, lrtStation, lrtStationCollection, lrtTrackCollection } from "@/lib/lrt-network"
-import { ferryPierFeatures, ferryVesselFeatures } from "@/lib/ferry-network"
+import { ferryPierFeatures } from "@/lib/ferry-network"
+import { ferryMotionFeatures, syncFerryMotion, type FerryMotion } from "@/lib/ferry-run"
 import { beginPush, endPush, type PushGate } from "@/lib/frame-push"
 import { advanceRuns, mergeRuns, runCollection, runsFromTrains, type TrainRun } from "@/lib/mtr-run"
 import type { ApproachPoint, Basemap, CitybusResponse, Corridor, FerryResponse, GmbResponse, HarbourJourney, KmbResponse, LrtResponse, MtrResponse, NlbResponse, PictureResponse, SpeedBand, WatchLayer, WatchLayers } from "@/lib/types"
@@ -254,6 +255,7 @@ export function CityMap({
   const runsRef = useRef<TrainRun[]>([])
   const lrtRef = useRef(lrt)
   const lrtRunsRef = useRef<TrainRun[]>([])
+  const ferryMotionRef = useRef<FerryMotion[]>([])
   const onMapRef = useRef(onMap)
   const onViewRef = useRef(onView)
   const readyRef = useRef(false)
@@ -347,6 +349,10 @@ export function CityMap({
   }, [lrt])
 
   useEffect(() => {
+    ferryMotionRef.current = ferry?.ok ? syncFerryMotion(ferryMotionRef.current, ferry.vessels, Date.now()) : []
+  }, [ferry])
+
+  useEffect(() => {
     basemapRef.current = basemap
   }, [basemap])
 
@@ -436,10 +442,11 @@ export function CityMap({
     // and a GeoJSON push every frame aborts the tile reload before the dot moves.
     const ios = iosWebKit()
     const pushGap = ios ? 140 : 0
-    const gates: Record<"particles" | "mtr" | "lrt", PushGate> = {
+    const gates: Record<"particles" | "mtr" | "lrt" | "ferry", PushGate> = {
       particles: { busy: false, at: 0 },
       mtr: { busy: false, at: 0 },
       lrt: { busy: false, at: 0 },
+      ferry: { busy: false, at: 0 },
     }
     let keep: HTMLDivElement | null = null
     if (ios) {
@@ -511,6 +518,12 @@ export function CityMap({
           const moving = runCollection(lrtRunsRef.current, lrtPoint)
           if (ios) pushMovingSource(lightRail, gates.lrt, moving, now, pushGap)
           else lightRail.setData(moving)
+        }
+        const boats = geoJsonSource(current, "ferry-vessels")
+        if (boats && layerShown(current, "ferry-vessels")) {
+          const moving = ferryMotionFeatures(ferryMotionRef.current, Date.now())
+          if (ios) pushMovingSource(boats, gates.ferry, moving, now, pushGap)
+          else boats.setData(moving)
         }
         refreshTrainLabels(current, now)
       }
@@ -677,7 +690,7 @@ export function CityMap({
         geoJsonSource(map, "ferry-vessels")?.setData(emptyCollection())
       } else {
         geoJsonSource(map, "ferry-piers")?.setData(ferryPierCollection(map, ferry, locale, labels))
-        geoJsonSource(map, "ferry-vessels")?.setData(ferryVesselFeatures(ferry))
+        geoJsonSource(map, "ferry-vessels")?.setData(ferryMotionFeatures(ferryMotionRef.current, Date.now()))
       }
     }
     paint()

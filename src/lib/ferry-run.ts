@@ -87,6 +87,13 @@ export function estimateFerryVessels(
       minutes: place.minutes,
       destTc: track.toTc,
       destEn: track.toEn,
+      fix: "clock",
+      fromLng: from.lng,
+      fromLat: from.lat,
+      toLng: to?.lng ?? from.lng,
+      toLat: to?.lat ?? from.lat,
+      departAt,
+      arriveAt,
     })
   }
   return vessels
@@ -113,4 +120,130 @@ function isDeparture(mark: FerryMark, track: FerryTrack): boolean {
 
 function isArrival(mark: FerryMark, track: FerryTrack): boolean {
   return mark.route === track.route && mark.arriving && mark.pierId === track.toId
+}
+
+export type FerryMotion = {
+  id: string
+  fix: "gps" | "clock"
+  nameTc: string
+  nameEn: string
+  route: string
+  eta: string
+  minutes: number | null
+  destTc: string
+  destEn: string
+  gpsLng: number
+  gpsLat: number
+  gpsAt: number
+  east: number
+  north: number
+  fromLng: number
+  fromLat: number
+  toLng: number
+  toLat: number
+  departAt: number | null
+  arriveAt: number | null
+}
+
+const GPS_COAST_MS = 70_000
+
+export function syncFerryMotion(previous: readonly FerryMotion[], vessels: readonly FerryVessel[], now: number): FerryMotion[] {
+  return vessels.map((vessel) => {
+    const prior = previous.find((item) => item.id === vessel.id && item.fix === vessel.fix)
+    if (vessel.fix === "gps") {
+      const same = prior != null && prior.gpsLng === vessel.lng && prior.gpsLat === vessel.lat
+      const dt = prior ? now - prior.gpsAt : 0
+      const stepped = prior != null && !same && dt > 5_000 && dt < 180_000
+      return {
+        id: vessel.id,
+        fix: "gps",
+        nameTc: vessel.nameTc,
+        nameEn: vessel.nameEn,
+        route: vessel.route,
+        eta: vessel.eta,
+        minutes: vessel.minutes,
+        destTc: vessel.destTc ?? "",
+        destEn: vessel.destEn ?? "",
+        gpsLng: vessel.lng,
+        gpsLat: vessel.lat,
+        gpsAt: same && prior ? prior.gpsAt : now,
+        east: stepped && prior ? (vessel.lng - prior.gpsLng) / dt : same && prior ? prior.east : 0,
+        north: stepped && prior ? (vessel.lat - prior.gpsLat) / dt : same && prior ? prior.north : 0,
+        fromLng: vessel.lng,
+        fromLat: vessel.lat,
+        toLng: vessel.lng,
+        toLat: vessel.lat,
+        departAt: null,
+        arriveAt: null,
+      }
+    }
+    return {
+      id: vessel.id,
+      fix: "clock",
+      nameTc: vessel.nameTc,
+      nameEn: vessel.nameEn,
+      route: vessel.route,
+      eta: vessel.eta,
+      minutes: vessel.minutes,
+      destTc: vessel.destTc ?? "",
+      destEn: vessel.destEn ?? "",
+      gpsLng: vessel.lng,
+      gpsLat: vessel.lat,
+      gpsAt: now,
+      east: 0,
+      north: 0,
+      fromLng: vessel.fromLng ?? vessel.lng,
+      fromLat: vessel.fromLat ?? vessel.lat,
+      toLng: vessel.toLng ?? vessel.lng,
+      toLat: vessel.toLat ?? vessel.lat,
+      departAt: vessel.departAt ?? null,
+      arriveAt: vessel.arriveAt ?? null,
+    }
+  })
+}
+
+export function ferryMotionPoint(motion: FerryMotion, now: number): { lng: number; lat: number; minutes: number | null } | null {
+  if (motion.fix === "gps") {
+    const age = Math.max(0, Math.min(GPS_COAST_MS, now - motion.gpsAt))
+    return { lng: motion.gpsLng + motion.east * age, lat: motion.gpsLat + motion.north * age, minutes: motion.minutes }
+  }
+  const samePier = motion.toLng === motion.fromLng && motion.toLat === motion.fromLat
+  return placeFerry(
+    { lng: motion.fromLng, lat: motion.fromLat },
+    samePier ? null : { lng: motion.toLng, lat: motion.toLat },
+    motion.departAt,
+    motion.arriveAt,
+    now,
+  )
+}
+
+export function ferryMotionFeatures(motions: readonly FerryMotion[], now: number): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = []
+  for (const motion of motions) {
+    const point = ferryMotionPoint(motion, now)
+    if (!point) continue
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+      properties: {
+        nameTc: motion.nameTc,
+        nameEn: motion.nameEn,
+        routes: JSON.stringify([]),
+        board: JSON.stringify([{
+          route: motion.route,
+          destTc: motion.destTc,
+          destEn: motion.destEn,
+          originTc: "",
+          originEn: "",
+          arriving: false,
+          eta: motion.eta,
+          minutes: point.minutes,
+          remarkTc: "",
+          remarkEn: "",
+          scheduled: false,
+        }]),
+      },
+    })
+  }
+  return { type: "FeatureCollection", features }
 }

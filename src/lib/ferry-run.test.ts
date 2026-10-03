@@ -12,7 +12,7 @@ export async function resolve(specifier, context, nextResolve) {
 `
 register(`data:text/javascript,${encodeURIComponent(hook)}`)
 
-const { estimateFerryVessels, placeFerry } = await import("./ferry-run.ts")
+const { estimateFerryVessels, ferryMotionPoint, placeFerry, syncFerryMotion } = await import("./ferry-run.ts")
 
 const from = { lng: 114, lat: 22 }
 const to = { lng: 114.1, lat: 22 }
@@ -72,5 +72,55 @@ const nextOnly = estimateFerryVessels(
 assert.equal(nextOnly.length, 1)
 assert.equal(nextOnly[0]?.lng, from.lng)
 assert.equal(nextOnly[0]?.minutes, 10)
+
+const gps = {
+  id: "CECC-1",
+  fix: "gps" as const,
+  nameTc: "中環 – 長洲",
+  nameEn: "Central – Cheung Chau",
+  lng: 114.1,
+  lat: 22.2,
+  route: "CECC",
+  eta: "",
+  minutes: 10,
+  destTc: "長洲",
+  destEn: "Cheung Chau",
+}
+const first = syncFerryMotion([], [gps], now)
+const atFix = ferryMotionPoint(first[0], now)
+assert.equal(atFix?.lng, 114.1)
+assert.equal(atFix?.lat, 22.2)
+const moved = syncFerryMotion(first, [{ ...gps, lng: 114.11 }], now + 60_000)
+const atGps = ferryMotionPoint(moved[0], now + 60_000)
+assert.equal(atGps?.lng, 114.11)
+const coast = ferryMotionPoint(moved[0], now + 90_000)
+assert.ok(coast)
+assert.ok(coast.lng > 114.11)
+assert.ok(coast.lng < 114.12)
+
+const clock = syncFerryMotion([], [{
+  id: "run-1-a",
+  fix: "clock",
+  nameTc: "甲 – 乙",
+  nameEn: "A – B",
+  lng: 114.05,
+  lat: 22,
+  route: "1",
+  eta: "",
+  minutes: 10,
+  destTc: "乙",
+  destEn: "B",
+  fromLng: from.lng,
+  fromLat: from.lat,
+  toLng: to.lng,
+  toLat: to.lat,
+  departAt: now - 10 * 60_000,
+  arriveAt: now + 10 * 60_000,
+}], now)
+const early = ferryMotionPoint(clock[0], now)
+const later = ferryMotionPoint(clock[0], now + 60_000)
+assert.ok(early && later)
+assert.ok(later.lng > early.lng)
+assert.ok(later.lng < to.lng)
 
 console.log("ferry run ok")
