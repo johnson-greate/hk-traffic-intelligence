@@ -13,6 +13,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    id: "2026-10-03-satellite",
+    date: "2026-10-03",
+    kind: "improved",
+    en: "On a phone, the satellite picture uses the sharper image.",
+    tc: "在手機上，衛星圖使用較清晰的畫面。",
+    sc: "在手机上，卫星图使用较清晰的画面。",
+  },
+  {
     id: "2026-10-03-top-bar",
     date: "2026-10-03",
     kind: "improved",

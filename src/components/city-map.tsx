@@ -84,13 +84,6 @@ function mapPixelRatio(): number {
   return ratio
 }
 
-function rasterTileSize(): number {
-  // The satellite source is 256 px tiles. On a phone the pitched view asks for the
-  // next zoom level across most of the screen. Treating each tile as 512 px asks
-  // for the coarser zoom, so the first picture is about a quarter of the images.
-  return narrowScreen() ? 512 : 256
-}
-
 // OSM Bright and OSM Liberty. The files in those repositories call a keyed
 // MapTiler endpoint. OpenFreeMap publishes the same styles against its planet
 // tiles, which is the source this map already uses.
@@ -104,7 +97,9 @@ function satelliteStyle(): StyleSpecification {
       imagery: {
         type: "raster",
         tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-        tileSize: rasterTileSize(),
+        // Esri's picture is 256 px. A 512 px tile stretches that picture and the
+        // phone keeps the coarser zoom.
+        tileSize: 256,
         // Hong Kong imagery is real through zoom 19. Zoom 20 and above is Esri's
         // gray "Map Data Not Yet Available" tile, so the map scales the zoom 19 picture.
         maxzoom: 19,
@@ -115,12 +110,12 @@ function satelliteStyle(): StyleSpecification {
         tiles: [
           "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
         ],
-        tileSize: rasterTileSize(),
+        tileSize: 256,
       },
     },
     layers: [
-      { id: "satellite", type: "raster", source: "imagery" },
-      { id: "places", type: "raster", source: "labels", paint: { "raster-opacity": 0.88 } },
+      { id: "satellite", type: "raster", source: "imagery", paint: { "raster-fade-duration": 0 } },
+      { id: "places", type: "raster", source: "labels", paint: { "raster-fade-duration": 0, "raster-opacity": 0.88 } },
     ],
   }
 }
