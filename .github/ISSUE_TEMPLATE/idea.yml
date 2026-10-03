@@ -1,0 +1,19 @@
+name: 💡 建議
+description: 想改善某處，或者希望加入新功能
+title: "[建議] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你的建議
+      description: 想改甚麼？可以附截圖或手繪圖。
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: 為甚麼有用？
+      description: 例如：在甚麼情況下會用到，解決了甚麼不便。
+    validations:
+      required: true

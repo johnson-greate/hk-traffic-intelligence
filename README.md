@@ -1,5 +1,7 @@
 [繁體中文](README.zh-HK.md)
 
+> **AI Trade Training Course 同學**：請看 [學員指南](docs/STUDENT_GUIDE.md)，教你在自己電腦運行這個網站，以及怎樣回報問題。
+
 # HK Traffic Intelligence
 
 香港智慧城市交通情報網

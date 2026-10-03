@@ -128,7 +128,7 @@ git log --oneline -3
 ## 練習
 
 1. 由最新的 `main` 開一條 `docs/your-name-intro` branch。
-2. 在 `docs/course/` 新增一個檔案，寫三行自我介紹，commit。
+2. 在 `docs/teacher/` 新增一個檔案，寫三行自我介紹，commit。
 3. 再改一次（例如加一行學習目標），另外 commit。
 4. Push 並向**你自己 fork 的 `main`** 開 PR，描述包括 Summary 和 Test plan。
 5. 在 Files changed 確認只有一個檔案，merge、刪 branch，本地 `git pull`。
