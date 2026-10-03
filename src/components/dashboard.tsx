@@ -214,7 +214,7 @@ export function Dashboard() {
       />
       <p
         data-map-chrome="bottom"
-        className="pointer-events-auto absolute bottom-1 left-2 z-30 max-w-[calc(100%-1rem)] whitespace-nowrap bg-[#041018]/92 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.72rem] leading-snug text-white sm:bottom-[0.4rem] sm:left-3 sm:max-w-[min(22rem,calc(100%-26rem))]"
+        className="pointer-events-auto absolute bottom-1 left-2 z-30 max-w-[calc(100%-1rem)] bg-[#041018]/92 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.72rem] leading-snug text-white sm:bottom-[0.4rem] sm:left-3 sm:max-w-[min(22rem,calc(100%-26rem))] sm:whitespace-nowrap"
       >
         {m.creditBy}{" "}
         <a

@@ -120,6 +120,14 @@ export function OpsHud(props: OpsHudProps) {
   useEffect(() => {
     const root = document.documentElement
     const apply = () => {
+      const narrow = window.matchMedia("(max-width: 639px)").matches
+      const panel = document.querySelector<HTMLElement>("[data-map-chrome='panel']")
+      const panelBox = panel?.getBoundingClientRect()
+      if (narrow && open && panelBox && panelBox.height > 80 && panelBox.top > 80) {
+        root.style.setProperty("--map-dock-bottom", `${Math.ceil(window.innerHeight - panelBox.top + 8)}px`)
+      } else {
+        root.style.removeProperty("--map-dock-bottom")
+      }
       if (window.matchMedia("(min-width: 1024px)").matches) {
         root.style.removeProperty("--map-control-top")
         return
@@ -134,15 +142,18 @@ export function OpsHud(props: OpsHudProps) {
     }
     apply()
     const header = document.querySelector("[data-map-chrome='top']")
+    const panel = document.querySelector("[data-map-chrome='panel']")
     const observer = new ResizeObserver(apply)
     if (header) observer.observe(header)
+    if (panel) observer.observe(panel)
     window.addEventListener("resize", apply)
     return () => {
       observer.disconnect()
       window.removeEventListener("resize", apply)
       root.style.removeProperty("--map-control-top")
+      root.style.removeProperty("--map-dock-bottom")
     }
-  }, [barOpen, locale])
+  }, [barOpen, locale, open])
   return (
     <div className="pointer-events-none absolute inset-0 z-[5]">
       {barOpen ? null : (
@@ -161,7 +172,7 @@ export function OpsHud(props: OpsHudProps) {
           barOpen ? "" : "max-sm:hidden"
         }`}
       >
-        <div className="flex shrink-0 items-center gap-2 pr-1 sm:gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 pr-1 sm:gap-3">
           <div>
             <p className="hidden font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.18em] text-cyan-200/80 uppercase sm:block">{m.productMark}</p>
             <p className="font-[family-name:var(--font-hud)] text-sm whitespace-nowrap text-white">{m.productName}</p>
@@ -206,7 +217,7 @@ export function OpsHud(props: OpsHudProps) {
             {m.hide}
           </button>
         </div>
-        <div className="@container/bar flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-clip sm:gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto sm:gap-1.5">
           {crossings.map((crossing) => (
             <Metric
               key={crossing.code}
@@ -231,7 +242,6 @@ export function OpsHud(props: OpsHudProps) {
             value={halls.label}
             tone={TONE[halls.tone]}
             hint={m.boundaryHint}
-            className="hidden @min-[36rem]/bar:block"
             onClick={() => show("boundary", worstHall)}
           />
           {weather ? (
@@ -240,7 +250,6 @@ export function OpsHud(props: OpsHudProps) {
               value={weather.label}
               tone={TONE[weather.tone]}
               hint={m.weatherHint}
-              className="hidden @min-[42rem]/bar:block"
               onClick={() => show("weather", undefined)}
             />
           ) : null}

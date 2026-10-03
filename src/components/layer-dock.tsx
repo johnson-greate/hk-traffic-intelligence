@@ -104,7 +104,9 @@ export function LayerDock(props: LayerDockProps) {
     <div
       data-map-chrome="bottom"
       className={`pointer-events-auto absolute left-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-2 lg:left-16 ${
-        props.aboveMarquee ? "bottom-36 sm:bottom-28" : "bottom-28 sm:bottom-14 lg:max-w-[calc(100%-30rem)]"
+        props.aboveMarquee
+          ? "bottom-36 sm:bottom-28"
+          : "bottom-[var(--map-dock-bottom,7rem)] sm:bottom-14 sm:max-w-[calc(100%-24rem)] lg:max-w-[calc(100%-30rem)]"
       }`}
     >
       <div className="flex max-w-full items-center gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
