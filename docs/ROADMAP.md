@@ -23,21 +23,30 @@
 
 ## 第三階段：視覺升級
 
-| 狀態 | 項目 | 內容 | 工作量 |
-| --- | --- | --- | --- |
-| ⬜ | 車流粒子強化 | 代碼已有粒子動畫，可再按探測器車流量調整密度，令擠塞路段一眼看出 | 中 |
-| ⬜ | 雨區雷達疊層 | 疊上天文台雷達圖，配合黃雨、紅雨時看到雨帶與擠塞的關係 | 中 |
-| ⬜ | 日夜光影 | 天空顏色跟隨真實太陽位置轉變 | 細 |
+| 狀態 | 項目 | 內容 | 工作量 | PR |
+| --- | --- | --- | --- | --- |
+| ⬜ | 車流粒子強化 | 代碼已有粒子動畫，可再按探測器車流量調整密度，令擠塞路段一眼看出 | 中 | |
+| ⬜ | 雨區雷達疊層 | 疊上天文台雷達圖，配合黃雨、紅雨時看到雨帶與擠塞的關係 | 中 | |
+| ✅ | 日夜光影 | 天空顏色按香港的太陽高度轉變：夜（≤ −6°）、黃昏暖色地平線、日間藍天，平滑過渡，每 5 分鐘更新 | 細 | [#4](https://github.com/johnson-greate/hk-traffic-intelligence/pull/4) |
 | ⬜ | 大屏／簡報模式 | 全螢幕自動巡航熱點，配字幕，適合展覽、大堂和課堂示範 | 中 |
 
 ## 第四階段：易用性
 
-| 狀態 | 項目 | 內容 | 工作量 |
+| 狀態 | 項目 | 內容 | 工作量 | PR |
+| --- | --- | --- | --- | --- |
+| ⬜ | 「我附近」 | GPS 定位，顯示最近港鐵站及巴士站的下一班車 | 中 | |
+| ⬜ | 我的常用 | 收藏常用隧道、口岸、巴士站，開啟即見 | 細 | |
+| ✅ | 手機版重新排版 | 手機闊度下圖層按鈕收入「圖層」一粒掣，情報面板坐在其上，不再重疊；桌面版不變 | 中 | [#5](https://github.com/johnson-greate/hk-traffic-intelligence/pull/5) |
+| ⬜ | 分享連結與 PWA | 位置和圖層寫入 URL；可加到主畫面；八號風球或隧道擠塞時推送通知 | 中 | |
+
+## 教學與工程
+
+| 狀態 | 項目 | 內容 | PR |
 | --- | --- | --- | --- |
-| ⬜ | 「我附近」 | GPS 定位，顯示最近港鐵站及巴士站的下一班車 | 中 |
-| ⬜ | 我的常用 | 收藏常用隧道、口岸、巴士站，開啟即見 | 細 |
-| ⬜ | 手機版重新排版 | 改用 bottom sheet，圖層按鈕收納為「駕車」、「乘車」、「過關」等預設 | 中 |
-| ⬜ | 分享連結與 PWA | 位置和圖層寫入 URL；可加到主畫面；八號風球或隧道擠塞時推送通知 | 中 |
+| ✅ | 課程教材 | `docs/course/`：五課，由 PR #1、#2 的真實經過寫成（fork、branch／PR、先寫測試、部署、向 Claude Code 下指示） | [#3](https://github.com/johnson-greate/hk-traffic-intelligence/pull/3) |
+| ✅ | CI | GitHub Actions `checks`：每個 PR 跑 lint、typecheck、`npm test` | [#6](https://github.com/johnson-greate/hk-traffic-intelligence/pull/6) |
+| ✅ | Cron 診斷 | 快照每步計時、60 秒上限，失敗時寫 log；找出斷開原因是免費計劃 CPU 上限 | [#7](https://github.com/johnson-greate/hk-traffic-intelligence/pull/7) |
+| ✅ | Lint 忽略打包輸出 | 部署後 `npm run lint` 不再掃 `.cloudflare/` | [#8](https://github.com/johnson-greate/hk-traffic-intelligence/pull/8) |
 
 ## 第五階段：AI 功能
 
@@ -51,6 +60,7 @@
 - 網站：https://hktraffic.johnson-greate.workers.dev（Cloudflare 帳號 Johnson@greate.com.hk）
 - 部署：`CLOUDFLARE_ACCOUNT_ID=<帳號 ID> npm run deploy:vinext`，需要先 `npx cf auth login`。D1 database 會在第一次部署時自動建立
 - 本地測試歷史數據要用 `npm run dev:vinext`（port 4318）
+- `main` 受 ruleset `protect-main` 保護：禁止刪除、禁止 force push，PR 須通過 CI `checks` 才可 merge；所有改動（包括文件）都經 PR
 
 ## 已知問題
 
@@ -58,7 +68,7 @@
 
 - 頂部隧道時間顯示的是 8 個起點之中最快的一個，並非用戶所在位置的時間。過海決策卡已提供逐個起點的時間，頂部數字本身未改。
 - 開放數據沒有隧道收費金額，所以決策卡未包括收費。如要加入，需要以運輸署公布的分時收費表為準。
-- 手機版底部的圖層按鈕與情報面板重疊（原有問題）。
 - 天空與地面交界是一條硬邊。霧化需要 3D 地形才能柔化，而地圖目前關閉了地形。
 - `traffic.resource.hk` 未綁定。`resource.hk` 在另一個 Cloudflare 帳號，該帳號未有 Workers 權限；Worker 與域名須在同一帳號。
 - **Cloudflare 免費計劃 CPU 上限（每次 10 ms）不足。** 2026-10-03 用 `wrangler tail` 證實：每次快照 Cron 用 110–210 ms CPU，會間歇以 `exceededCpu` 被停止，數據因此斷開幾個鐘；訪客請求亦一樣，約一小時內有 75 次失敗（九巴、城巴、快拍最多）。決定：暫時維持免費計劃，接受斷續。升級 Workers Paid（US$5／月，CPU 上限 30 秒）即可解決，無需改程式。回放會有空檔，「比平時」需要累積更長時間。
+- 英文介面在手機闊度下，頂部語言切換按鈕右邊被裁走少許（原有問題）。
