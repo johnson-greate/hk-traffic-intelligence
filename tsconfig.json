@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "src/lib/mtr-estimate.test.ts", "src/lib/frame-push.test.ts", "src/lib/strategic-names.test.ts", "src/lib/history-store.test.ts"]
+  "exclude": ["node_modules", "src/lib/mtr-estimate.test.ts", "src/lib/frame-push.test.ts", "src/lib/strategic-names.test.ts", "src/lib/history-store.test.ts", "src/lib/record-snapshot.test.ts"]
 }
