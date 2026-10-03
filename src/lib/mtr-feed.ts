@@ -1,7 +1,7 @@
 import { openFeedCache } from "@/lib/feed-cache"
 import { carryArrivalClock, estimateTrains, type TrainObservation } from "@/lib/mtr-estimate"
 import { pool } from "@/lib/pool"
-import { nextStationSlice } from "@/lib/refresh-slice"
+import { fairLineReads } from "@/lib/refresh-slice"
 import { fetchUpstream } from "@/lib/upstream"
 import { mtrQueries, networkRoutes, stationPoint } from "@/lib/mtr-network"
 import { readSchedule } from "@/lib/mtr-schedule"
@@ -18,29 +18,26 @@ const remembered = new Map<string, Remembered>()
 const MEMORY_URL = "https://hktraffic.keith-li.workers.dev/internal/mtr-board-memory"
 let blockedUntil = 0
 let failures = 0
-let cursor = 0
 
-type SavedMemory = { cursor: number; stations: { key: string; at: number; board: MtrBoard; observations: TrainObservation[] }[] }
+type SavedMemory = { stations: { key: string; at: number; board: MtrBoard; observations: TrainObservation[] }[] }
 
 // Station positions stay in the network file. These calls are only the next-train
-// clock. One snapshot is about 120 station calls. The published feed has no
-// network dump, and it answers 429 if those calls arrive together. Each refresh
-// reads the next stale stations and keeps that place in the shared cache, so a
-// new worker continues around the network instead of rereading the first line.
+// clock. The published feed answers 429 if all 120 station calls arrive together,
+// so each refresh reads 16. The shared book is which stations we already know.
+// The next 16 are chosen so every line, including Tsuen Wan, is read before a
+// line that was just read gets another turn.
 export async function loadMtrSnapshot(now = Date.now()): Promise<MtrResponse> {
   if (now >= blockedUntil) failures = 0
   await readSharedMemory(now)
   if (now >= blockedUntil) {
-    const due = nextStationSlice(
+    const due = fairLineReads(
       mtrQueries(),
-      cursor,
       (pair) => remembered.get(`${pair.line}-${pair.station}`)?.at ?? null,
       now,
       STALE_MS,
       REFRESH_SLICE,
     )
-    cursor = due.cursor
-    await pool(due.items, FETCH_LIMIT, async (pair) => {
+    await pool(due, FETCH_LIMIT, async (pair) => {
       const key = `${pair.line}-${pair.station}`
       const previous = remembered.get(key)
       let parsed = await fetchPair(pair.line, pair.station)
@@ -95,7 +92,6 @@ async function readSharedMemory(now: number): Promise<void> {
     const hit = await cache.match(new Request(MEMORY_URL))
     if (!hit?.ok) return
     const saved = await hit.json() as SavedMemory
-    if (Number.isInteger(saved.cursor)) cursor = saved.cursor
     for (const item of saved.stations ?? []) {
       if (now - item.at > REMEMBER_MS) continue
       const current = remembered.get(item.key)
@@ -117,7 +113,7 @@ async function writeSharedMemory(now: number): Promise<void> {
   try {
     await cache.put(
       new Request(MEMORY_URL),
-      new Response(JSON.stringify({ cursor, stations } satisfies SavedMemory), {
+      new Response(JSON.stringify({ stations } satisfies SavedMemory), {
         headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=180" },
       }),
     )
