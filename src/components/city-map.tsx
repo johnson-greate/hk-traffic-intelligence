@@ -39,6 +39,7 @@ import { lrtColor, lrtPoint, lrtStationCollection, lrtTrackCollection } from "@/
 import { beginPush, endPush, type PushGate } from "@/lib/frame-push"
 import { advanceRuns, mergeRuns, runCollection, runsFromTrains, type TrainRun } from "@/lib/mtr-run"
 import { KMB_MIN_ZOOM, kmbViewKey } from "@/lib/kmb-view"
+import { skyFor, sunAltitude } from "@/lib/sun-sky"
 import type { ApproachPoint, Basemap, CitybusResponse, Corridor, HarbourJourney, KmbResponse, LrtResponse, MtrResponse, PictureResponse, SpeedBand, WatchLayer, WatchLayers } from "@/lib/types"
 
 // Turbopack rewrites MapLibre's own worker URL into a chunk the worker cannot run.
@@ -59,15 +60,11 @@ const OPENING = {
 }
 
 // A pitched camera shows the horizon. Without a sky the space above it is empty
-// black; this fills it with a night gradient in the HUD's cyan, hazing into the city.
-const SKY: SkySpecification = {
-  "sky-color": "#03111c",
-  "horizon-color": "#1f6f8b",
-  "fog-color": "#0a2433",
-  "sky-horizon-blend": 0.7,
-  "horizon-fog-blend": 0.6,
-  "fog-ground-blend": 0.4,
-  "atmosphere-blend": 0,
+// black; this fills it with a gradient that follows the sun over Hong Kong.
+const SKY_REFRESH_MS = 5 * 60 * 1000
+
+function skyNow(): SkySpecification {
+  return skyFor(sunAltitude(new Date(), 22.3, 114.17))
 }
 
 function narrowScreen(): boolean {
@@ -405,7 +402,7 @@ export function CityMap({
     closeCardRef.current = cards.close
     const restoreOverlays = () => {
       // setStyle drops the sky with the rest of the style, so it comes back here too.
-      map.setSky(SKY)
+      map.setSky(skyNow())
       mountDataLayers(map)
       bindOverlayClicks(map, cards.show, copyRef, approachesRef, mtrRef, lrtRef)
       holdDataCreditOpen(map)
@@ -485,11 +482,16 @@ export function CityMap({
     }
     frame = requestAnimationFrame(tick)
     const pulse = ios ? window.setInterval(step, 140) : 0
+    // The sun moves slowly; a basemap swap mid-load picks the sky up in restoreOverlays.
+    const sky = window.setInterval(() => {
+      if (readyRef.current) map.setSky(skyNow())
+    }, SKY_REFRESH_MS)
 
     return () => {
       active = false
       cancelAnimationFrame(frame)
       if (pulse) window.clearInterval(pulse)
+      window.clearInterval(sky)
       keep?.remove()
       readyRef.current = false
       if (!removed) {
