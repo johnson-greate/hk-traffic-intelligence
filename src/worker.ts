@@ -12,8 +12,13 @@ const worker = {
   ...site,
   async scheduled(_controller: unknown, env: Env, ctx: Context) {
     const load = (path: string) => site.fetch(new Request(`https://snapshot.internal${path}`), env, ctx)
-    const result = await recordSnapshot(env.DB, load)
-    console.log("snapshot", JSON.stringify(result))
+    console.log("snapshot start")
+    try {
+      console.log("snapshot", JSON.stringify(await recordSnapshot(env.DB, load)))
+    } catch (error) {
+      console.error("snapshot failed", error instanceof Error ? error.message : String(error))
+      throw error
+    }
   },
 }
 
