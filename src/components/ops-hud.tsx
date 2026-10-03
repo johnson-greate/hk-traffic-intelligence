@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type KeyboardEvent } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { flushSync } from "react-dom"
 import { useI18n } from "@/components/locale"
 import { boundaryGlance } from "@/lib/control-points"
@@ -225,7 +225,7 @@ export function OpsHud(props: OpsHudProps) {
       )}
       <header
         data-map-chrome="top"
-        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-row items-center gap-1 overflow-x-clip border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:flex-col sm:items-stretch sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[64rem]/hud:flex-row @min-[64rem]/hud:items-center lg:right-4 lg:left-16 ${
+        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-row items-center gap-1 border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:flex-col sm:items-stretch sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[64rem]/hud:flex-row @min-[64rem]/hud:items-center lg:right-4 lg:left-16 ${
           barOpen ? "" : "max-sm:hidden"
         }`}
       >
@@ -267,27 +267,20 @@ export function OpsHud(props: OpsHudProps) {
           </button>
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1">
-          <div className="bar-scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1.5">
           {origin ? (
-            <label className="block shrink-0 border border-white/10 bg-black/30 px-1 py-1 text-left sm:px-2">
-              <span className="block font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.harbourFrom}</span>
-              <select
-                aria-label={m.harbourFrom}
-                value={pinned ? pinned.id : ""}
-                onChange={(event) => {
-                  const next = event.target.value
-                  setPinnedOrigin(next || null)
-                  const point = next ? approachPoints.find((item) => item.id === next) : nearest
-                  if (point) props.onFocus({ id: `harbour-origin-${point.id}`, coordinates: point.coordinates })
-                }}
-                className="block w-[4.5rem] truncate bg-transparent font-[family-name:var(--font-hud)] text-sm leading-none text-white sm:w-56 sm:text-base"
-              >
-                <option value="">{m.followMap(displayText(m.locale, nearest?.nameTc ?? "", nearest?.name ?? ""))}</option>
-                <OriginGroup label={m.fromIsland} points={islandPoints} />
-                <OriginGroup label={m.fromKowloon} points={kowloonPoints} />
-              </select>
-            </label>
+            <OriginMenu
+              pinnedId={pinned?.id ?? null}
+              nearest={nearest}
+              island={islandPoints}
+              kowloon={kowloonPoints}
+              onChoose={(id) => {
+                setPinnedOrigin(id)
+                const point = id ? approachPoints.find((item) => item.id === id) : nearest
+                if (point) props.onFocus({ id: `harbour-origin-${point.id}`, coordinates: point.coordinates })
+              }}
+            />
           ) : null}
+          <div className="bar-scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1.5">
           {origin ? (["CH", "EH", "WH"] as const).map((code) => {
             const crossing = crossings.find((item) => item.code === code)
             if (!crossing) {
@@ -497,15 +490,93 @@ export function OpsHud(props: OpsHudProps) {
   )
 }
 
-function OriginGroup(props: { label: string; points: ApproachPoint[] }) {
+function OriginMenu(props: {
+  pinnedId: string | null
+  nearest: ApproachPoint | null
+  island: ApproachPoint[]
+  kowloon: ApproachPoint[]
+  onChoose: (id: string | null) => void
+}) {
+  const { locale, messages: m } = useI18n()
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("mousedown", close)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", close)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [open])
+  const chosen = props.pinnedId
+    ? [...props.island, ...props.kowloon].find((point) => point.id === props.pinnedId) ?? props.nearest
+    : props.nearest
+  const road = chosen ? displayText(locale, chosen.nameTc, chosen.name) : ""
+  const choose = (id: string | null) => {
+    props.onChoose(id)
+    setOpen(false)
+  }
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={m.harbourFrom}
+        onClick={() => setOpen((current) => !current)}
+        className="block max-w-28 border border-white/10 bg-black/30 px-1 py-1 text-left sm:max-w-56 sm:px-2"
+      >
+        <span className="block font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.harbourFrom}</span>
+        <span className="block truncate font-[family-name:var(--font-hud)] text-sm leading-none text-white sm:text-base">
+          {props.pinnedId ? road : m.followMap(road)}
+        </span>
+      </button>
+      {open ? (
+        <div role="listbox" aria-label={m.harbourFrom} className="absolute top-full left-0 z-30 mt-1 max-h-80 w-[22rem] overflow-y-auto border border-cyan-200/30 bg-[#041018] p-1 text-sm text-white shadow-[0_0_24px_rgba(34,211,238,0.12)]">
+          <OriginChoice selected={props.pinnedId == null} onChoose={() => choose(null)}>
+            {m.followMap(props.nearest ? displayText(locale, props.nearest.nameTc, props.nearest.name) : "")}
+          </OriginChoice>
+          <OriginList label={m.fromIsland} points={props.island} pinnedId={props.pinnedId} onChoose={choose} />
+          <OriginList label={m.fromKowloon} points={props.kowloon} pinnedId={props.pinnedId} onChoose={choose} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function OriginList(props: { label: string; points: ApproachPoint[]; pinnedId: string | null; onChoose: (id: string) => void }) {
   const { locale } = useI18n()
   if (props.points.length === 0) return null
   return (
-    <optgroup label={props.label}>
+    <div className="mt-1">
+      <p className="px-2 py-1 font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/70 uppercase">{props.label}</p>
       {props.points.map((point) => (
-        <option key={point.id} value={point.id}>{displayText(locale, point.nameTc, point.name)}</option>
+        <OriginChoice key={point.id} selected={props.pinnedId === point.id} onChoose={() => props.onChoose(point.id)}>
+          {displayText(locale, point.nameTc, point.name)}
+        </OriginChoice>
       ))}
-    </optgroup>
+    </div>
+  )
+}
+
+function OriginChoice(props: { selected: boolean; onChoose: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={props.selected}
+      onClick={props.onChoose}
+      className={`block w-full px-2 py-1.5 text-left whitespace-nowrap text-white hover:bg-white/10 ${props.selected ? "bg-white/10" : ""}`}
+    >
+      {props.children}
+    </button>
   )
 }
 
