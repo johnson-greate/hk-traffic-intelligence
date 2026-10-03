@@ -45,9 +45,10 @@ export async function writeBriefing(
     const key = keys[provider]
     if (!key) continue
     try {
-      const text = parseBriefing(await writers[provider](key, SYSTEM, facts))
+      const raw = await writers[provider](key, SYSTEM, facts)
+      const text = parseBriefing(raw)
       if (text) return { text, provider, model: MODELS[provider] }
-      failures.push(`${provider}: unusable answer`)
+      failures.push(`${provider}: ${briefingProblem(raw)}`)
     } catch (error) {
       failures.push(`${provider}: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -56,17 +57,34 @@ export async function writeBriefing(
 }
 
 export function parseBriefing(raw: string): Briefing | null {
+  const read = readBriefing(raw)
+  return typeof read === "string" ? null : read
+}
+
+// Why an answer was rejected, or null when it is usable.
+export function briefingProblem(raw: string): string | null {
+  const read = readBriefing(raw)
+  return typeof read === "string" ? read : null
+}
+
+function readBriefing(raw: string): Briefing | string {
   const json = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
+  if (!json) return "empty answer"
   let value: unknown
   try {
     value = JSON.parse(json)
   } catch {
-    return null
+    return "not JSON"
   }
-  if (!value || typeof value !== "object") return null
-  const { zhHK, zhCN, en } = value as Record<string, unknown>
-  const texts = [zhHK, zhCN, en].map((text) => (typeof text === "string" ? text.trim() : ""))
-  if (texts.some((text) => text.length === 0 || text.length > MAX_CHARS)) return null
+  if (!value || typeof value !== "object") return "not a JSON object"
+  const fields = value as Record<string, unknown>
+  const texts: string[] = []
+  for (const key of ["zhHK", "zhCN", "en"]) {
+    const text = typeof fields[key] === "string" ? fields[key].trim() : ""
+    if (!text) return `${key} empty`
+    if (text.length > MAX_CHARS) return `${key} too long (${text.length})`
+    texts.push(text)
+  }
   const [hk, cn, english] = texts as [string, string, string]
   return { "zh-HK": hk, "zh-CN": cn, en: english }
 }

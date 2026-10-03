@@ -11,6 +11,9 @@ export default defineConfig({
     env: {
       ASSETS: bindings.assets(),
       DB: bindings.d1({ name: "hktraffic-history" }),
+      // Declared so each deploy keeps the values set with `wrangler secret put`.
+      DEEPSEEK_API_KEY: bindings.secret(),
+      ANTHROPIC_API_KEY: bindings.secret(),
     },
   }),
 });

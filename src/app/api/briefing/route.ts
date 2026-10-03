@@ -5,7 +5,7 @@ import { GET as getWarnings } from "@/app/api/warnings/route"
 import { briefingFacts, type BriefingInput } from "@/lib/briefing-facts"
 import { writeBriefing, type Briefing, type BriefingKeys, type Provider } from "@/lib/briefing-llm"
 import { bestCrossings } from "@/lib/crossings"
-import type { ApproachesResponse, TrafficResponse, WarningsResponse } from "@/lib/types"
+import type { ApproachesResponse, IncidentsResponse, TrafficResponse, WarningsResponse } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
 
@@ -51,14 +51,14 @@ async function gatherFacts(request: Request): Promise<BriefingInput> {
   const [traffic, approaches, incidents, warnings] = await Promise.all([
     read<TrafficResponse>(getTraffic(new Request(`${origin}/api/traffic`))),
     read<ApproachesResponse>(getApproaches()),
-    read<GeoJSON.FeatureCollection>(getIncidents()),
+    read<IncidentsResponse>(getIncidents()),
     read<WarningsResponse>(getWarnings(new Request(`${origin}/api/warnings?lang=en`))),
   ])
   return {
     at: new Date(),
     traffic: traffic?.ok ? traffic : null,
     crossings: bestCrossings(approaches?.ok ? approaches.points : []).map((row) => ({ code: row.code, minutes: row.minutes })),
-    incidents: (incidents?.features ?? []).map((feature) => {
+    incidents: (incidents?.ok ? incidents.incidents.features : []).map((feature) => {
       const p = (feature.properties ?? {}) as Record<string, string | undefined>
       return { tc: p.nameTc ?? "", en: p.name ?? "", whereTc: p.location ?? "", whereEn: p.locationEn ?? "" }
     }),
