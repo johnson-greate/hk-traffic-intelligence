@@ -1,7 +1,7 @@
 import { gmbStop, gmbStopsWithin } from "@/lib/gmb-reach"
 import { kmbReachMetres } from "@/lib/kmb-reach"
 import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue } from "@/lib/polite-fetch"
+import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
 import { pool } from "@/lib/pool"
 import { fetchUpstream } from "@/lib/upstream"
 import type { GmbCall, GmbPlacesResponse, GmbResponse, GmbStopBoard } from "@/lib/types"
@@ -46,14 +46,18 @@ export function loadGmbPlaces(lng: number, lat: number, _now = Date.now(), zoom 
 export async function loadGmbNear(lng: number, lat: number, now = Date.now(), zoom = Number.NaN): Promise<GmbResponse> {
   forgetStale(remembered, now)
   const nearest = gmbStopsWithin(lng, lat, kmbReachMetres(zoom, lat), GMB_CAP)
-  let missed = 0
-  await pool(nearest.map((stop) => stop.id), FETCH_LIMIT, async (stopId) => {
-    const cached = remembered.get(stopId)
-    if (!etaDue(cached, now)) return
-    const rows = await fetchStop(stopId)
-    if (rows) remembered.set(stopId, { at: now, rows })
-    else missed += 1
+  const turn = await takeEtaTurn(async () => {
+    let missed = 0
+    await pool(nearest.map((stop) => stop.id), FETCH_LIMIT, async (stopId) => {
+      const cached = remembered.get(stopId)
+      if (!etaDue(cached, now)) return
+      const rows = await fetchStop(stopId)
+      if (rows) remembered.set(stopId, { at: now, rows })
+      else missed += 1
+    })
+    return missed
   })
+  const missed = turn ?? 0
 
   const stops: GmbStopBoard[] = []
   for (const stop of nearest) {
@@ -76,7 +80,7 @@ export async function loadGmbNear(lng: number, lat: number, now = Date.now(), zo
     ...(error ? { error } : {}),
     observedAt: new Date(now).toISOString(),
     stops,
-    cacheable: missed === 0,
+    cacheable: turn !== null && missed === 0,
   }
 }
 

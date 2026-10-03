@@ -298,17 +298,22 @@ export function CityMap({
   useEffect(() => {
     const map = mapRef.current
     if (disabled || !map || !mapReady) return
+    let settle = 0
     const report = () => {
-      const centre = map.getCenter()
-      const zoom = map.getZoom()
-      const key = kmbViewKey(centre.lng, centre.lat, zoom)
-      if (viewKeyRef.current === key) return
-      viewKeyRef.current = key
-      onViewRef.current({ lng: centre.lng, lat: centre.lat, zoom })
+      window.clearTimeout(settle)
+      settle = window.setTimeout(() => {
+        const centre = map.getCenter()
+        const zoom = map.getZoom()
+        const key = kmbViewKey(centre.lng, centre.lat, zoom)
+        if (viewKeyRef.current === key) return
+        viewKeyRef.current = key
+        onViewRef.current({ lng: centre.lng, lat: centre.lat, zoom })
+      }, 800)
     }
     report()
     map.on("moveend", report)
     return () => {
+      window.clearTimeout(settle)
       map.off("moveend", report)
     }
   }, [disabled, mapReady])

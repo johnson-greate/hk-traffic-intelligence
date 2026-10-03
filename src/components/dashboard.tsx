@@ -101,15 +101,15 @@ export function Dashboard() {
   const nlbUrl = layers.nlb && nlbQuery ? `/api/nlb?${nlbQuery}` : null
   const mtrLive = useLiveJson<MtrResponse>("/api/mtr", 15_000)
   const kmbPlacesLive = useLiveJson<KmbPlacesResponse>(kmbPlacesUrl, PLACE_POLL_MS)
-  const kmbLive = useLiveJson<KmbResponse>(kmbUrl, KMB_POLL_MS)
+  const kmbLive = useLiveJson<KmbResponse>(kmbUrl, KMB_POLL_MS, true)
   const lrtLive = useLiveJson<LrtResponse>(layers.lrt ? "/api/lrt" : null, 15_000)
   const citybusPlacesLive = useLiveJson<CitybusPlacesResponse>(citybusPlacesUrl, PLACE_POLL_MS)
-  const citybusLive = useLiveJson<CitybusResponse>(citybusUrl, 60_000)
+  const citybusLive = useLiveJson<CitybusResponse>(citybusUrl, 60_000, true)
   const gmbPlacesLive = useLiveJson<GmbPlacesResponse>(gmbPlacesUrl, PLACE_POLL_MS)
-  const gmbLive = useLiveJson<GmbResponse>(gmbUrl, KMB_POLL_MS)
+  const gmbLive = useLiveJson<GmbResponse>(gmbUrl, KMB_POLL_MS, true)
   const nlbPlacesLive = useLiveJson<NlbPlacesResponse>(nlbPlacesUrl, PLACE_POLL_MS)
-  const nlbLive = useLiveJson<NlbResponse>(nlbUrl, 60_000)
-  const ferryLive = useLiveJson<FerryResponse>(layers.ferry ? "/api/ferry" : null, 60_000)
+  const nlbLive = useLiveJson<NlbResponse>(nlbUrl, 60_000, true)
+  const ferryLive = useLiveJson<FerryResponse>(layers.ferry ? "/api/ferry" : null, 60_000, true)
   const kmbMerged = useMemo(
     () => mergePlaceArrivals(kmbPlacesLive.data, kmbLive.data),
     [kmbLive.data, kmbPlacesLive.data],

@@ -2,7 +2,7 @@ import { arrivalPairs } from "@/lib/arrival-pairs"
 import { nlbArrivalMs } from "@/lib/nlb-clock"
 import { nearestNlbStops, nlbStop } from "@/lib/nlb-network"
 import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue } from "@/lib/polite-fetch"
+import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
 import { pool } from "@/lib/pool"
 import { fetchUpstream } from "@/lib/upstream"
 import type { NlbCall, NlbPlacesResponse, NlbResponse, NlbStopBoard } from "@/lib/types"
@@ -40,15 +40,19 @@ export async function loadNlbNear(lng: number, lat: number, now = Date.now()): P
     const record = nlbStop(stop.id)
     return { id: stop.id, routes: record?.services.map((service) => service.id) ?? [] }
   }), PAIR_BUDGET)
-  let missed = 0
-  await pool(pairs, FETCH_LIMIT, async (pair) => {
-    const key = `${pair.stopId}/${pair.route}`
-    const cached = remembered.get(key)
-    if (!etaDue(cached, now)) return
-    const rows = await fetchEta(pair.route, pair.stopId)
-    if (rows) remembered.set(key, { at: now, rows })
-    else missed += 1
+  const turn = await takeEtaTurn(async () => {
+    let missed = 0
+    await pool(pairs, FETCH_LIMIT, async (pair) => {
+      const key = `${pair.stopId}/${pair.route}`
+      const cached = remembered.get(key)
+      if (!etaDue(cached, now)) return
+      const rows = await fetchEta(pair.route, pair.stopId)
+      if (rows) remembered.set(key, { at: now, rows })
+      else missed += 1
+    })
+    return missed
   })
+  const missed = turn ?? 0
 
   const stops: NlbStopBoard[] = []
   for (const stop of nearest) {
@@ -77,7 +81,7 @@ export async function loadNlbNear(lng: number, lat: number, now = Date.now()): P
     ...(error ? { error } : {}),
     observedAt: nearest.length === 0 ? null : new Date(now).toISOString(),
     stops,
-    cacheable: missed === 0,
+    cacheable: turn !== null && missed === 0,
   }
 }
 

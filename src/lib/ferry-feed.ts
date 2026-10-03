@@ -2,7 +2,7 @@ import { ferryCalls, ferryMinutes, starSailings } from "@/lib/ferry-clock"
 import { fortuneDepartureTimes, nextFortuneDepartures } from "@/lib/fortune-timetable"
 import { SUN_ROUTES } from "@/lib/ferry-routes"
 import { etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue } from "@/lib/polite-fetch"
+import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
 import { pool } from "@/lib/pool"
 import { fetchUpstream } from "@/lib/upstream"
 import type { FerryCall, FerryResponse, FerryVessel } from "@/lib/types"
@@ -55,6 +55,11 @@ const FORTUNE_LEGS = [
 export async function loadFerrySnapshot(now = Date.now()): Promise<FerryResponse> {
   forgetStale(clocks, now)
   forgetStale(vessels, now)
+  const turn = await takeEtaTurn(() => refreshFerryClock(now))
+  return ferryBoard(now, turn !== null)
+}
+
+async function refreshFerryClock(now: number): Promise<true> {
   const jobs = [
     ...SUN_ROUTES.map((route) => ({ key: `sun:${route.code}`, run: () => fetchSun(route) })),
     ...HKKF_ROUTES.flatMap((route) => (["inbound", "outbound"] as const).map((direction) => ({
@@ -71,7 +76,10 @@ export async function loadFerrySnapshot(now = Date.now()): Promise<FerryResponse
   })
   await rememberStar(now)
   await rememberFortune(now)
+  return true
+}
 
+function ferryBoard(now: number, fresh: boolean): FerryResponse {
   const byPier = new Map<string, FerryCall[]>()
   for (const item of clocks.values()) {
     const rows = heldRows(item, now) ?? []
@@ -112,7 +120,7 @@ export async function loadFerrySnapshot(now = Date.now()): Promise<FerryResponse
       if (vessel) moving.push({ ...vessel, minutes: ferryMinutes(vessel.eta, now) })
     }
   }
-  return { ok: true, observedAt: new Date(now).toISOString(), piers: boards, vessels: moving }
+  return { ok: true, observedAt: new Date(now).toISOString(), piers: boards, vessels: moving, cacheable: fresh }
 }
 
 async function fetchSun(route: (typeof SUN_ROUTES)[number]): Promise<SunFix | null> {
