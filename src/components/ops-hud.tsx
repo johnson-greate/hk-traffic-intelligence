@@ -131,6 +131,8 @@ export function OpsHud(props: OpsHudProps) {
         root.style.removeProperty("--marquee-bottom")
         root.style.removeProperty("--dock-closed-bottom")
       }
+      const scroll = document.querySelector<HTMLElement>(".bar-scroll")
+      if (scroll) scroll.classList.toggle("bar-scroll-more", scroll.scrollWidth > scroll.clientWidth + 2)
       const header = document.querySelector<HTMLElement>("[data-map-chrome='top']")
       const panel = document.querySelector<HTMLElement>("[data-map-chrome='panel']")
       const list = document.getElementById("harbour-intel-list")
@@ -215,16 +217,26 @@ export function OpsHud(props: OpsHudProps) {
       )}
       <header
         data-map-chrome="top"
-        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-col gap-1 overflow-x-clip border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[52rem]/hud:flex-row @min-[52rem]/hud:items-center lg:right-4 lg:left-16 ${
+        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-col gap-1 overflow-x-clip border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[64rem]/hud:flex-row @min-[64rem]/hud:items-center lg:right-4 lg:left-16 ${
           barOpen ? "" : "max-sm:hidden"
         }`}
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-2 pr-1 sm:gap-3">
-          <div>
-            <p className="hidden font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.18em] text-cyan-200/80 uppercase sm:block">{m.productMark}</p>
-            <p className="font-[family-name:var(--font-hud)] text-sm whitespace-nowrap text-white">{m.productName}</p>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 sm:gap-3">
+          <div className="flex w-full items-center gap-1.5 sm:contents">
+            <div className="min-w-0 flex-1 sm:flex-none">
+              <p className="hidden font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.18em] text-cyan-200/80 uppercase sm:block">{m.productMark}</p>
+              <p className="font-[family-name:var(--font-hud)] text-sm leading-tight text-white">{m.productName}</p>
+            </div>
+            <button
+              type="button"
+              aria-expanded={barOpen}
+              onClick={() => setBarOpen(false)}
+              className="shrink-0 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
+            >
+              {m.hide}
+            </button>
           </div>
-          <div className="flex shrink-0 items-center gap-2 sm:block">
+          <div className="shrink-0">
             <p className="font-[family-name:var(--font-hud)] text-sm text-cyan-50 tabular-nums">{clock}</p>
             <p className="flex items-center gap-1.5 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.14em] text-cyan-100 uppercase">
               <span className={`size-1.5 rounded-full ${live ? "hud-pulse bg-[#3DDC97]" : "bg-[#FFC857]"}`} />
@@ -255,16 +267,9 @@ export function OpsHud(props: OpsHudProps) {
           >
             {m.changelog}
           </button>
-          <button
-            type="button"
-            aria-expanded={barOpen}
-            onClick={() => setBarOpen(false)}
-            className="ml-auto shrink-0 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
-          >
-            {m.hide}
-          </button>
         </div>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <div className="bar-scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1.5">
           {crossings.map((crossing) => (
             <Metric
               key={crossing.code}
@@ -294,16 +299,17 @@ export function OpsHud(props: OpsHudProps) {
           {weather ? (
             <Metric
               label={m.weather}
-              value={weather.label}
+              value={/^\d+°C/.test(weather.label) ? (weather.label.split(" · ")[0] ?? weather.label) : weather.label}
               tone={TONE[weather.tone]}
-              hint={m.weatherHint}
+              hint={weather.label}
               onClick={() => show("weather", undefined)}
             />
           ) : null}
+          </div>
           <button
             type="button"
             onClick={() => show("roads", worstRoad)}
-            className="block shrink-0 border border-white/10 bg-black/30 px-1 py-1 text-left sm:ml-auto sm:px-2"
+            className="block shrink-0 border border-white/10 bg-black/30 px-0.5 py-1 text-left sm:px-2"
             title={bandTitle(summary, m)}
           >
             <p className="font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.network}</p>
@@ -429,7 +435,7 @@ function Metric(props: { label: string; value: string; tone: string; hint?: stri
       type="button"
       onClick={props.onClick}
       title={props.hint}
-      className={`block shrink-0 border border-white/10 bg-black/30 px-1 py-1 text-left sm:px-2 ${props.className ?? ""}`}
+      className={`block shrink-0 border border-white/10 bg-black/30 px-0.5 py-1 text-left sm:px-2 ${props.className ?? ""}`}
     >
       <p className="font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{props.label}</p>
       <p className="font-[family-name:var(--font-hud)] text-sm leading-none whitespace-nowrap tabular-nums sm:text-base" style={{ color: props.tone }}>

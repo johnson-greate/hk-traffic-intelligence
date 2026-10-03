@@ -13,6 +13,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    id: "2026-10-03-top-bar",
+    date: "2026-10-03",
+    kind: "improved",
+    en: "The speed stays on the top bar with the tunnel times.",
+    tc: "車速與隧道時間同列在頂欄。",
+    sc: "车速与隧道时间同列在顶栏。",
+  },
+  {
     id: "2026-10-03-phone-layout",
     date: "2026-10-03",
     kind: "improved",

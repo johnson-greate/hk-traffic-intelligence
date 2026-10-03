@@ -171,6 +171,18 @@
   object-position: right bottom;
 }
 
+.bar-scroll {
+  scrollbar-width: none;
+}
+
+.bar-scroll-more {
+  mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
+}
+
+.bar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .intel-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgb(186 230 253 / 42%) transparent;
