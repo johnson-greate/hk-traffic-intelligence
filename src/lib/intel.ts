@@ -1,4 +1,4 @@
-import { roadOf } from "./camera-place.ts"
+import { warnedCrossings } from "./crossings.ts"
 import { controlName, displayText, hallStatus, hallSummary, vehicleSentence, type Messages } from "./i18n.ts"
 import type { ApproachPoint, Corridor, TrafficResponse, WeatherConditions, WeatherWarning } from "./types.ts"
 
@@ -203,30 +203,12 @@ function controlDetail(feature: GeoJSON.Feature, m: Messages): string {
 }
 
 function crossingsOf(points: ApproachPoint[], m: Messages): IntelItem[] {
-  const best = bestCrossingRows(points, m)
-  return [...best.entries()].flatMap(([code, row]) => {
-    if (row.tone !== "red" && row.tone !== "amber") return []
-    return [crossingItem(code, row, m)]
-  })
-}
-
-function bestCrossingRows(points: ApproachPoint[], m: Messages) {
-  const best = new Map<string, { minutes: number; from: string; tone: IntelTone; coordinates: [number, number] }>()
-  for (const point of points) {
-    for (const leg of point.legs) {
-      if (leg.minutes == null) continue
-      if (leg.code !== "CH" && leg.code !== "EH" && leg.code !== "WH") continue
-      const current = best.get(leg.code)
-      if (current && current.minutes <= leg.minutes) continue
-      best.set(leg.code, {
-        minutes: leg.minutes,
-        from: displayText(m.locale, point.nameTc ? roadOf(point.nameTc) : "", roadOf(point.name)),
-        tone: leg.colour,
-        coordinates: point.coordinates,
-      })
-    }
-  }
-  return best
+  return warnedCrossings(points).map((row) => crossingItem(row.code, {
+    minutes: row.minutes,
+    from: displayText(m.locale, row.fromTc, row.from),
+    tone: row.colour,
+    coordinates: row.coordinates,
+  }, m))
 }
 
 function crossingItem(

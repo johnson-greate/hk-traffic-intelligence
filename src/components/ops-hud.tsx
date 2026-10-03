@@ -4,12 +4,12 @@ import { useEffect, useState, type KeyboardEvent } from "react"
 import { flushSync } from "react-dom"
 import { useI18n } from "@/components/locale"
 import { boundaryGlance } from "@/lib/control-points"
-import { bestCrossings } from "@/lib/crossings"
+import { crossingsFrom, nearestApproach } from "@/lib/crossings"
 import { displayText, formatClock, LOCALE_MARK, LOCALES, type Messages } from "@/lib/i18n"
 import { CHANGELOG, changelogText } from "@/lib/changelog"
 import { INTEL_TABS, intelBoard, type IntelItem, type IntelTab } from "@/lib/intel"
 import { formatSpeed } from "@/lib/speed"
-import type { ApproachesResponse, HarbourJourney, TrafficResponse, WeatherConditions, WeatherWarning } from "@/lib/types"
+import type { ApproachPoint, ApproachesResponse, HarbourJourney, TrafficResponse, WeatherConditions, WeatherWarning } from "@/lib/types"
 import { weatherBar } from "@/lib/warnings"
 
 type OpsHudProps = {
@@ -39,6 +39,7 @@ type OpsHudProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onFocus: (focus: { id: string; coordinates: [number, number] }) => void
+  view: { lng: number; lat: number; zoom: number } | null
 }
 
 const TONE: Record<HarbourJourney["colour"], string> = {
@@ -59,8 +60,15 @@ export function OpsHud(props: OpsHudProps) {
   const clock = useHongKongClock(locale)
   const [tab, setTab] = useState<IntelTab>("ranked")
   const [barOpen, setBarOpen] = useState(true)
+  const [pinnedOrigin, setPinnedOrigin] = useState<string | null>(null)
   const open = props.open
-  const crossings = bestCrossings(props.approaches?.ok ? props.approaches.points : [])
+  const approachPoints = props.approaches?.ok ? props.approaches.points : []
+  const nearest = nearestApproach(approachPoints, props.view)
+  const pinned = pinnedOrigin ? approachPoints.find((point) => point.id === pinnedOrigin) ?? null : null
+  const origin = pinned ?? nearest
+  const crossings = crossingsFrom(origin)
+  const islandPoints = approachPoints.filter((point) => point.id.startsWith("H"))
+  const kowloonPoints = approachPoints.filter((point) => point.id.startsWith("K"))
   const summary = props.traffic?.ok ? props.traffic.summary : null
   const totalBands = summary ? summary.free + summary.slow + summary.congested : 0
   const live = Boolean(summary) && !props.trafficError
@@ -260,16 +268,55 @@ export function OpsHud(props: OpsHudProps) {
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <div className="bar-scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1.5">
-          {crossings.map((crossing) => (
-            <Metric
-              key={crossing.code}
-              label={BAR_KEY[crossing.code] ? m[BAR_KEY[crossing.code]] : crossing.label}
-              value={m.minutes(crossing.minutes)}
-              tone={TONE[crossing.colour]}
-              hint={m.approachHint(displayText(m.locale, crossing.fromTc, crossing.from))}
-              onClick={() => props.onFocus({ id: `crossing-${crossing.code}`, coordinates: crossing.coordinates })}
-            />
-          ))}
+          {origin ? (
+            <label className="block shrink-0 border border-white/10 bg-black/30 px-1 py-1 text-left sm:px-2">
+              <span className="block font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.harbourFrom}</span>
+              <select
+                aria-label={m.harbourFrom}
+                value={pinned ? pinned.id : ""}
+                onChange={(event) => {
+                  const next = event.target.value
+                  setPinnedOrigin(next || null)
+                  const point = next ? approachPoints.find((item) => item.id === next) : nearest
+                  if (point) props.onFocus({ id: `harbour-origin-${point.id}`, coordinates: point.coordinates })
+                }}
+                className="block w-[4.5rem] truncate bg-transparent font-[family-name:var(--font-hud)] text-sm leading-none text-white sm:w-56 sm:text-base"
+              >
+                <option value="">{m.followMap(displayText(m.locale, nearest?.nameTc ?? "", nearest?.name ?? ""))}</option>
+                <OriginGroup label={m.fromIsland} points={islandPoints} />
+                <OriginGroup label={m.fromKowloon} points={kowloonPoints} />
+              </select>
+            </label>
+          ) : null}
+          {origin ? (["CH", "EH", "WH"] as const).map((code) => {
+            const crossing = crossings.find((item) => item.code === code)
+            if (!crossing) {
+              return (
+                <Metric
+                  key={code}
+                  label={m[BAR_KEY[code]]}
+                  value={m.harbourMissing}
+                  tone={TONE.none}
+                  hint={m.harbourMissingHint}
+                  onClick={() => {
+                    if (origin) props.onFocus({ id: `harbour-origin-${origin.id}`, coordinates: origin.coordinates })
+                  }}
+                />
+              )
+            }
+            const road = displayText(m.locale, crossing.fromTc, crossing.from)
+            const compare = crossing.slower > 0 ? m.slowerBy(crossing.slower) : m.fastestHere
+            return (
+              <Metric
+                key={crossing.code}
+                label={m[BAR_KEY[crossing.code]]}
+                value={m.minutes(crossing.minutes)}
+                tone={TONE[crossing.colour]}
+                hint={`${m.approachHint(road)} ${compare}`}
+                onClick={() => props.onFocus({ id: `crossing-${crossing.code}`, coordinates: crossing.coordinates })}
+              />
+            )
+          }) : null}
           {incidentCount > 0 ? (
             <Metric
               label={m.incident}
@@ -447,6 +494,18 @@ export function OpsHud(props: OpsHudProps) {
         ) : null}
       </section>
     </div>
+  )
+}
+
+function OriginGroup(props: { label: string; points: ApproachPoint[] }) {
+  const { locale } = useI18n()
+  if (props.points.length === 0) return null
+  return (
+    <optgroup label={props.label}>
+      {props.points.map((point) => (
+        <option key={point.id} value={point.id}>{displayText(locale, point.nameTc, point.name)}</option>
+      ))}
+    </optgroup>
   )
 }
 

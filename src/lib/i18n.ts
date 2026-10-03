@@ -48,6 +48,14 @@ export type Messages = {
   westernFull: string
   minutes: (n: number) => string
   approachHint: (road: string) => string
+  harbourFrom: string
+  fromIsland: string
+  fromKowloon: string
+  followMap: (road: string) => string
+  fastestHere: string
+  slowerBy: (n: number) => string
+  harbourMissing: string
+  harbourMissingHint: string
   incident: string
   incidentsOpen: (n: number) => string
   incidentHint: string
@@ -216,6 +224,14 @@ const en: Messages = {
   westernFull: "Western Harbour",
   minutes: (n) => `${n} min`,
   approachHint: (road) => `${road}. Show this approach on the map.`,
+  harbourFrom: "From",
+  fromIsland: "Hong Kong Island",
+  fromKowloon: "Kowloon",
+  followMap: (road) => road ? `Nearest sign · ${road}` : "Nearest sign on the map",
+  fastestHere: "Fastest of the three tunnels from this sign",
+  slowerBy: (n) => `${n} min slower than the fastest`,
+  harbourMissing: "n/a",
+  harbourMissingHint: "This sign does not publish a time for this tunnel.",
   incident: "Incident",
   incidentsOpen: (n) => (n === 1 ? "1 open" : `${n} open`),
   incidentHint: "Open special traffic news",
@@ -384,6 +400,14 @@ const zhHK: Messages = {
   westernFull: "西區海底隧道",
   minutes: (n) => `${n} 分鐘`,
   approachHint: (road) => `${road}。在地圖顯示此進路口。`,
+  harbourFrom: "起點",
+  fromIsland: "港島出發",
+  fromKowloon: "九龍出發",
+  followMap: (road) => road ? `地圖最近 · ${road}` : "地圖上最近的路口",
+  fastestHere: "由此起點出發，三條隧道中最快",
+  slowerBy: (n) => `比最快慢 ${n} 分鐘`,
+  harbourMissing: "無",
+  harbourMissingHint: "這個起點沒有這條隧道的時間。",
   incident: "事故",
   incidentsOpen: (n) => `${n} 宗`,
   incidentHint: "特別交通消息",
@@ -550,6 +574,14 @@ const zhCN: Messages = {
   westernFull: "西区海底隧道",
   minutes: (n) => `${n} 分钟`,
   approachHint: (road) => `${road}。在地图显示此进路口。`,
+  harbourFrom: "起点",
+  fromIsland: "港岛出发",
+  fromKowloon: "九龙出发",
+  followMap: (road) => road ? `地图最近 · ${road}` : "地图上最近的路口",
+  fastestHere: "由此起点出发，三条隧道中最快",
+  slowerBy: (n) => `比最快慢 ${n} 分钟`,
+  harbourMissing: "无",
+  harbourMissingHint: "这个起点没有这条隧道的时间。",
   incident: "事故",
   incidentsOpen: (n) => `${n} 宗`,
   incidentHint: "特别交通消息",

@@ -13,6 +13,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    id: "2026-10-03-harbour-from",
+    date: "2026-10-03",
+    kind: "improved",
+    en: "The three harbour times are compared from the same roadside sign, the one nearest the map. You can choose another sign.",
+    tc: "三條過海時間以同一個路口比較，預設是地圖上最近的路口，也可以另選起點。",
+    sc: "三条过海时间以同一个路口比较，预设是地图上最近的路口，也可以另选起点。",
+  },
+  {
     id: "2026-10-03-gmb-dest",
     date: "2026-10-03",
     kind: "added",

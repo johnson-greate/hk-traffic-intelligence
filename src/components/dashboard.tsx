@@ -211,6 +211,7 @@ export function Dashboard() {
         open={intelOpen}
         onOpenChange={setIntelOpen}
         onFocus={setFocus}
+        view={view}
       />
       <p
         data-map-chrome="bottom"
