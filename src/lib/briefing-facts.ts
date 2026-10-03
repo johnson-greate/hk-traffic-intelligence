@@ -79,5 +79,5 @@ function hongKongTime(at: Date): string {
 // Road names in the feed are often upper case.
 function englishName(name: string): string {
   if (name !== name.toUpperCase()) return name
-  return name.toLowerCase().replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+  return name.toLowerCase().replace(/(^|[\s(\-–])([a-z])/g, (_, before: string, letter: string) => before + letter.toUpperCase())
 }

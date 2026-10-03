@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { parseBriefing, writeBriefing, type Writers } from "./briefing-llm.ts"
+import { briefingProblem, parseBriefing, writeBriefing, type Writers } from "./briefing-llm.ts"
 
 const good = JSON.stringify({ zhHK: "東隧最快，5 分鐘。", zhCN: "东隧最快，5 分钟。", en: "The Eastern Harbour Crossing is fastest at 5 min." })
 
@@ -10,6 +10,13 @@ assert.equal(parseBriefing(""), null)
 assert.equal(parseBriefing("not json"), null)
 assert.equal(parseBriefing(JSON.stringify({ zhHK: "ok", zhCN: "", en: "ok" })), null)
 assert.equal(parseBriefing(JSON.stringify({ zhHK: "x".repeat(400), zhCN: "ok", en: "ok" })), null)
+
+// The reason is kept, so a failure in production says what was wrong.
+assert.equal(briefingProblem(good), null)
+assert.equal(briefingProblem(""), "empty answer")
+assert.equal(briefingProblem("not json"), "not JSON")
+assert.equal(briefingProblem(JSON.stringify({ zhHK: "ok", en: "ok" })), "zhCN empty")
+assert.equal(briefingProblem(JSON.stringify({ zhHK: "ok", zhCN: "ok", en: "x".repeat(301) })), "en too long (301)")
 
 const calls: string[] = []
 const writers = (deepseek: () => Promise<string>, anthropic: () => Promise<string>): Writers => ({
@@ -46,7 +53,7 @@ assert.deepEqual(calls, ["anthropic"])
 await assert.rejects(writeBriefing("facts", {}, writers(async () => good, async () => good)), /no AI provider key/)
 await assert.rejects(
   writeBriefing("facts", { deepseek: "d", anthropic: "a" }, writers(async () => Promise.reject(new Error("HTTP 503")), async () => "nope")),
-  /deepseek: HTTP 503; anthropic: unusable answer/,
+  /deepseek: HTTP 503; anthropic: not JSON/,
 )
 
 console.log("briefing llm ok")

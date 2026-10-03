@@ -21,12 +21,14 @@ const corridors = [
   corridor("4", "短路", "SHORT ROAD", "congested", 3, 0.2),
   corridor("5", "彌敦道", "NATHAN ROAD", "slow", 20, 5),
   corridor("6", "", "", "congested", 2, 9),
+  corridor("7", "皇后大道東", "QUEEN'S ROAD EAST", "congested", 7, 0.6),
 ]
 
 // Jams are grouped by road, longest first, with the slowest reading; short stubs and unnamed roads drop out.
 assert.deepEqual(jammedRoads(corridors, 5), [
   { tc: "窩打老道", en: "Waterloo Road", km: 3.9, slowestKmh: 7 },
   { tc: "告士打道", en: "Gloucester Road", km: 2.3, slowestKmh: 4 },
+  { tc: "皇后大道東", en: "Queen's Road East", km: 0.6, slowestKmh: 7 },
 ])
 assert.equal(jammedRoads(corridors, 1).length, 1)
 
@@ -52,7 +54,7 @@ assert.equal(
     "Time: 2026-10-03 14:20 Hong Kong time",
     "Road network: mean 62 km/h; segments free 3200, slow 800, congested 200",
     "Harbour crossings, fastest published time from any start: Cross-Harbour Tunnel (紅隧) 6 min, Eastern Harbour Crossing (東隧) 5 min",
-    "Congested roads, longest first: 窩打老道 Waterloo Road 3.9 km, slowest 7 km/h; 告士打道 Gloucester Road 2.3 km, slowest 4 km/h",
+    "Congested roads, longest first: 窩打老道 Waterloo Road 3.9 km, slowest 7 km/h; 告士打道 Gloucester Road 2.3 km, slowest 4 km/h; 皇后大道東 Queen's Road East 0.6 km, slowest 7 km/h",
     "Open traffic incidents: 交通意外 Traffic accident at 青雲路 Tsing Wan Road",
     "Weather warnings now in effect: Amber Rainstorm Warning Signal",
     "Weather: 28°C, rainfall in the past hour 0 mm",
