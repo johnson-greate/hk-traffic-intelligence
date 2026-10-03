@@ -4,9 +4,9 @@
 
 # 香港智慧城市交通情報網
 
-香港智慧城市交通情報網把即時城市集中在同一幅地圖上：過海隧道、策略性道路、港鐵和輕鐵列車、九巴、龍運和城巴到站時間、陸路口岸輪候，以及天文台天氣。
+香港智慧城市交通情報網把即時城市集中在同一幅地圖上：過海隧道、策略性道路、港鐵和輕鐵列車、九巴、龍運、城巴、綠色專線小巴和嶼巴到站時間、渡輪碼頭、陸路口岸輪候，以及天文台天氣。
 
-這個儀表板之所以做得到，是因為香港政府把這些資料以開放數據形式公布。運輸署、入境事務處、天文台，以及負責 HKeMobility 和 DATA.GOV.HK 的團隊，向公眾發放這些數字，港鐵、九巴、龍運和城巴亦公布各自的班次資料，而這個網站只是把它們放在一起閱讀。
+這個儀表板之所以做得到，是因為香港政府把這些資料以開放數據形式公布。運輸署、入境事務處、天文台，以及負責 HKeMobility 和 DATA.GOV.HK 的團隊，向公眾發放這些數字，港鐵、九巴、龍運、城巴、綠色專線小巴營辦商、嶼巴、新渡輪、港九小輪和天星小輪亦公布各自的班次資料，而這個網站只是把它們放在一起閱讀。
 
 網站設於 [hktraffic.keith-li.workers.dev](https://hktraffic.keith-li.workers.dev)。不需要開設帳戶，也不用安裝任何東西。網站預設以繁體中文顯示。如要轉用簡體中文或英文，請按時鐘旁邊的語言按鈕。
 
@@ -30,11 +30,11 @@
 
 過關和看天氣方面，下一組資料隨後出現。八個陸路管制站顯示旅客大堂，分居民與訪客、入境與出境，並一併顯示通往該口岸的策略性道路車速。羅湖供旅客過關，不設私家車通道，所以已公布的數字不包括私家車輪候。生效中的天文台警告會全部列出。天色平靜時，網站仍會報出天文台氣溫，以及過去一小時有沒有下雨。
 
-搭港鐵和巴士方面，儀表板是同一個做法。港鐵路線畫在地圖上，每班列車按港鐵已公布的下一班車分鐘、終點和月台移動。輕鐵在屯門、元朗和天水圍有自己的路軌，每班車按那些車站已公布的到站分鐘移動。九巴和龍運車站顯示已公布的到站時間，包括尚未有實時位置、只提供原定時間的班次。這份資料裏的龍運，以機場和東涌路線為主，包括 A、E、S、N、NA 和 R 系列。城巴車站顯示已公布的到站時間，涵蓋港島和城巴行走的其他路線。
+搭港鐵和巴士方面，儀表板是同一個做法。港鐵路線畫在地圖上，每班列車按港鐵已公布的下一班車分鐘、終點和月台移動。輕鐵在屯門、元朗和天水圍有自己的路軌，每班車按那些車站已公布的到站分鐘移動。九巴和龍運車站顯示已公布的到站時間，包括尚未有實時位置、只提供原定時間的班次。這份資料裏的龍運，以機場和東涌路線為主，包括 A、E、S、N、NA 和 R 系列。城巴車站顯示已公布的到站時間，涵蓋港島和城巴行走的其他路線。綠色專線小巴車站顯示運輸署站點表上的路線編號，若已公布到站時間，亦一併顯示。地圖望向大嶼山時，才顯示嶼巴車站。天星小輪、新渡輪和港九小輪的碼頭留在地圖上。天星小輪顯示班次相隔多久。新渡輪和港九小輪顯示下一班開出時間。新渡輪的資料帶有船隻位置時，地圖才畫出該船。
 
 若幾項情況同時需要留意，網站會把它們排好次序。尚未結束的交通消息、列為擠塞的道路、非常繁忙的旅客大堂或天氣警告會排在前面，讓人先讀到最重要的消息。
 
-香港公開的數據，遠多於這個智慧城市儀表板所用的部分。這裏出現的，是本頁稍後列出的交通、口岸、天氣、港鐵、輕鐵、九巴、龍運和城巴資料。
+香港公開的數據，遠多於這個智慧城市儀表板所用的部分。這裏出現的，是本頁稍後列出的交通、口岸、天氣、港鐵、輕鐵、九巴、龍運、城巴、綠色專線小巴、嶼巴和渡輪資料。
 
 ## 開源
 
@@ -62,7 +62,7 @@ npm run dev
 
 ## 網站如何保持輕盈
 
-任何人打開公開網站，讀到的都是每一項資料的共用副本，放在 Cloudflare，供全城共用。列車大約每十五秒更新，九巴和龍運大約每三十秒，城巴和其餘資料大約每一分鐘。副本仍然有效時，下一位訪客讀的就是這份副本。只有在副本到期需要更新時，網站才會向公布該資料的機構再讀取一次。很多人因此可以同時閱讀這個儀表板，節奏跟隨這些機構本身公布資料的速度，而網站不會加重政府伺服器的負擔。
+任何人打開公開網站，讀到的都是每一項資料的共用副本，放在 Cloudflare，供全城共用。列車大約每十五秒更新，九巴和龍運大約每三十秒，城巴、綠色專線小巴、嶼巴、渡輪和其餘資料大約每一分鐘。綠色專線小巴和嶼巴只讀取目前畫面裏的車站。地圖望向九龍時，不會向嶼巴查詢到站時間。副本仍然有效時，下一位訪客讀的就是這份副本。只有在副本到期需要更新時，網站才會向公布該資料的機構再讀取一次。很多人因此可以同時閱讀這個儀表板，節奏跟隨這些機構本身公布資料的速度，而網站不會加重政府伺服器的負擔。
 
 ## 數字從哪裏來
 
@@ -83,13 +83,18 @@ npm run dev
 | 下一班輕鐵 | [輕鐵實時列車服務資訊](https://data.gov.hk/tc-data/dataset/mtr-lrnt_data-light-rail-nexttrain-data) |
 | 下一班九巴或龍運 | [九巴及龍運的預計到站時間](https://data.etabus.gov.hk/v1/transport/kmb/stop) |
 | 下一班城巴 | [城巴實時到站時間](https://data.gov.hk/tc-data/dataset/ctb-eta-transport-realtime-eta) |
+| 下一班綠色專線小巴 | 運輸署[綠色專線小巴到站時間](https://data.etagmb.gov.hk/route/HKI) |
+| 下一班嶼巴 | [嶼巴預計到站時間](https://rt.data.gov.hk/v2/transport/nlb/route.php?action=list) |
+| 新渡輪航班 | [新渡輪預計到站時間](https://www.sunferry.com.hk/eta/?route=CECC) |
+| 港九小輪航班 | [港九小輪開放數據](https://www.hkkfeta.com/opendata/route) |
+| 天星小輪班次 | [中環至尖沙咀時間表](https://www.starferry.com.hk/sites/default/files/upload/open_data/csv/ferry_sf_central_tsimshatsui_timetable_eng.csv) |
 | 警告、氣溫和雨量 | 香港天文台的[警告摘要](https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=tc)和[本港地區天氣報告](https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc) |
 | 街道圖和樓宇 | [OSM Bright](https://github.com/openmaptiles/osm-bright-gl-style) 和 [OSM Liberty](https://github.com/maputnik/osm-liberty)，由 [OpenFreeMap](https://openfreemap.org) 提供，數據來自 [OpenStreetMap](https://www.openstreetmap.org/copyright) 貢獻者和 [OpenMapTiles](https://openmaptiles.org/) |
 | 衛星照片 | [Esri World Imagery](https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer)。影像 © Esri |
 
 ## 作者
 
-[Keith Li](https://www.linkedin.com/in/keithlihk) 製作香港智慧城市交通情報網，用於 Agentic Engineer 的課堂、公開演講和大學客席講座。它之所以做得到，是因為運輸署、入境事務處、香港天文台、港鐵、九巴、龍運、城巴，以及負責 HKeMobility 的團隊，已經把這些數字向公眾公布。
+[Keith Li](https://www.linkedin.com/in/keithlihk) 製作香港智慧城市交通情報網，用於 Agentic Engineer 的課堂、公開演講和大學客席講座。它之所以做得到，是因為運輸署、入境事務處、香港天文台、港鐵、九巴、龍運、城巴、嶼巴、新渡輪、港九小輪、天星小輪，以及負責 HKeMobility 的團隊，已經把這些數字向公眾公布。
 
 如果你用過香港智慧城市交通情報網，請 [按 star](https://github.com/keithligh/hk-traffic-intelligence)。下一位讀者就是這樣找到它的。
 

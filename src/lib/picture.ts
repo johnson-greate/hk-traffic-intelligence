@@ -1,5 +1,10 @@
 import { standardHan } from "@/lib/camera-place"
 
+export const CAMERA_LAYER_MS = 6 * 60 * 60 * 1000
+export const TOLL_LAYER_MS = 6 * 60 * 60 * 1000
+export const WORKS_LAYER_MS = 5 * 60 * 1000
+export const PICTURE_POLL_MS = WORKS_LAYER_MS
+
 const HARBOUR_DISTRICTS: ReadonlySet<string> = new Set([
   "Central & Western",
   "Wan Chai",

@@ -137,7 +137,6 @@ export type Messages = {
   incidentsLayer: string
   replay: string
   basemap: string
-  layers: string
   speedKey: string
   pictureFailed: string
   mapFailed: string
@@ -189,6 +188,15 @@ export type Messages = {
   citybus: string
   citybusFailed: string
   citybusNone: string
+  gmb: string
+  gmbFailed: string
+  gmbNone: string
+  nlb: string
+  nlbFailed: string
+  nlbNone: string
+  ferry: string
+  ferryFailed: string
+  ferryNone: string
 }
 
 const en: Messages = {
@@ -297,7 +305,6 @@ const en: Messages = {
   incidentsLayer: "Incidents",
   replay: "Replay",
   basemap: "Basemap",
-  layers: "Layers",
   speedKey: "Official traffic class. Good, average, and bad are the Transport Department saturation levels.",
   pictureFailed: "The camera and works picture did not load.",
   mapFailed: "The satellite map did not start. Crossing minutes and network speed stay on screen.",
@@ -349,6 +356,15 @@ const en: Messages = {
   citybus: "Citybus",
   citybusFailed: "Citybus arrivals did not load.",
   citybusNone: "No arrival on the board",
+  gmb: "Green minibus",
+  gmbFailed: "Green minibus arrivals did not load.",
+  gmbNone: "No arrival on the board",
+  nlb: "New Lantao Bus",
+  nlbFailed: "New Lantao Bus arrivals did not load.",
+  nlbNone: "No arrival on the board",
+  ferry: "Ferry",
+  ferryFailed: "Ferry arrivals did not load.",
+  ferryNone: "No sailing on the board",
 }
 
 const zhHK: Messages = {
@@ -457,7 +473,6 @@ const zhHK: Messages = {
   incidentsLayer: "事故",
   replay: "重播",
   basemap: "底圖",
-  layers: "圖層",
   speedKey: "運輸署交通狀況等級：暢順、緩慢、擠塞。",
   pictureFailed: "未能載入快拍及工程畫面。",
   mapFailed: "衛星地圖未能啟動。過海時間與路網車速仍會顯示。",
@@ -509,6 +524,15 @@ const zhHK: Messages = {
   citybus: "城巴",
   citybusFailed: "未能取得城巴到站時間。",
   citybusNone: "班次表沒有到站時間",
+  gmb: "綠色專線小巴",
+  gmbFailed: "未能取得綠色專線小巴到站時間。",
+  gmbNone: "班次表沒有到站時間",
+  nlb: "嶼巴",
+  nlbFailed: "未能取得嶼巴到站時間。",
+  nlbNone: "班次表沒有到站時間",
+  ferry: "渡輪",
+  ferryFailed: "未能取得渡輪航班時間。",
+  ferryNone: "未有航班時間",
 }
 
 const zhCN: Messages = {
@@ -613,7 +637,6 @@ const zhCN: Messages = {
   incidentsLayer: "事故",
   replay: "重播",
   basemap: "底图",
-  layers: "图层",
   speedKey: "运输署交通状况等级：畅顺、缓慢、挤塞。",
   pictureFailed: "未能载入快拍及工程画面。",
   mapFailed: "卫星地图未能启动。过海时间与路网车速仍会显示。",
@@ -659,6 +682,15 @@ const zhCN: Messages = {
   citybus: "城巴",
   citybusFailed: "未能取得城巴到站时间。",
   citybusNone: "班次表没有到站时间",
+  gmb: "绿色专线小巴",
+  gmbFailed: "未能取得绿色专线小巴到站时间。",
+  gmbNone: "班次表没有到站时间",
+  nlb: "屿巴",
+  nlbFailed: "未能取得屿巴到站时间。",
+  nlbNone: "班次表没有到站时间",
+  ferry: "渡轮",
+  ferryFailed: "未能取得渡轮航班时间。",
+  ferryNone: "未有航班时间",
 }
 
 export const MESSAGES: Record<Locale, Messages> = {

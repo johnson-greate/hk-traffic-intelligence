@@ -1,10 +1,11 @@
-type OkBody = { ok: boolean }
+type OkBody = { ok: boolean; cacheable?: boolean }
 
 export function viewCachedGet<T extends OkBody>(options: {
   freshMs: number
-  load: (lng: number, lat: number, now: number) => Promise<T>
+  load: (lng: number, lat: number, now: number, zoom: number) => Promise<T>
   missing: () => T
   failed: (error: unknown) => T
+  cacheKey?: (lng: number, lat: number, zoom: number) => string
 }): (request: Request) => Promise<Response> {
   const pending = new Map<string, Promise<T>>()
   const cached = new Map<string, { at: number; body: T }>()
@@ -15,16 +16,19 @@ export function viewCachedGet<T extends OkBody>(options: {
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
       return Response.json(options.missing(), { status: 400 })
     }
-    const key = `${lng.toFixed(3)},${lat.toFixed(3)}`
+    const zoom = Number(url.searchParams.get("zoom"))
+    const key = options.cacheKey
+      ? options.cacheKey(lng, lat, zoom)
+      : `${lng.toFixed(3)},${lat.toFixed(3)}`
     const now = Date.now()
     const hit = cached.get(key)
     if (hit && now - hit.at < options.freshMs) return Response.json(hit.body)
-    const current = pending.get(key) ?? options.load(lng, lat, now).finally(() => pending.delete(key))
+    const current = pending.get(key) ?? options.load(lng, lat, now, zoom).finally(() => pending.delete(key))
     pending.set(key, current)
     try {
       const body = await current
-      if (body.ok) cached.set(key, { at: Date.now(), body })
-      else if (hit) return Response.json(hit.body)
+      if (body.ok && body.cacheable !== false) cached.set(key, { at: Date.now(), body })
+      else if (!body.ok && hit) return Response.json(hit.body)
       return Response.json(body, { status: body.ok ? 200 : 502 })
     } catch (error) {
       if (hit) return Response.json(hit.body)

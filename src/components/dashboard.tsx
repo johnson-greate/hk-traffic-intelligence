@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { CityMap } from "@/components/city-map"
 import { LayerDock } from "@/components/layer-dock"
@@ -8,16 +8,26 @@ import { OpsHud } from "@/components/ops-hud"
 import { useLiveJson } from "@/components/use-live-json"
 import { useI18n } from "@/components/locale"
 import { decorateControlPoints } from "@/lib/control-points"
-import { KMB_MIN_ZOOM, KMB_POLL_MS } from "@/lib/kmb-view"
+import { KMB_MIN_ZOOM, KMB_POLL_MS, PLACE_POLL_MS } from "@/lib/kmb-view"
+import { inLantau } from "@/lib/lantau"
+import { PICTURE_POLL_MS } from "@/lib/picture"
+import { mergePlaceArrivals } from "@/lib/place-arrivals"
 import { hkoLang } from "@/lib/i18n"
 import type {
   ApproachesResponse,
+  CitybusPlacesResponse,
   CitybusResponse,
   ControlPointsResponse,
+  FerryResponse,
+  GmbPlacesResponse,
+  GmbResponse,
   IncidentsResponse,
+  KmbPlacesResponse,
   KmbResponse,
   LrtResponse,
   MtrResponse,
+  NlbPlacesResponse,
+  NlbResponse,
   PictureResponse,
   TrafficResponse,
   WarningsResponse,
@@ -25,6 +35,12 @@ import type {
   WatchLayers,
   Basemap,
 } from "@/lib/types"
+
+function liveError(error: string | null, body: { ok: boolean; error?: string } | null, fallback: string): string | null {
+  if (error) return error
+  if (!body) return null
+  return body.error ?? (body.ok ? null : fallback)
+}
 
 const LAYERS_ON: WatchLayers = {
   speed: true,
@@ -37,15 +53,9 @@ const LAYERS_ON: WatchLayers = {
   lrt: true,
   kmb: true,
   citybus: true,
-}
-
-function tunnelCount(tolls: GeoJSON.FeatureCollection): number {
-  const codes = new Set<string>()
-  for (const feature of tolls.features) {
-    const code = feature.properties && typeof feature.properties.code === "string" ? feature.properties.code : ""
-    if (code) codes.add(code)
-  }
-  return codes.size
+  gmb: true,
+  nlb: true,
+  ferry: true,
 }
 
 export function Dashboard() {
@@ -60,23 +70,58 @@ export function Dashboard() {
   const [ground, setGround] = useState<Exclude<Basemap, "buildings">>("satellite")
   const trafficLive = useLiveJson<TrafficResponse>(forceDown ? "/api/traffic?simulate=fail" : "/api/traffic")
   const approachesLive = useLiveJson<ApproachesResponse>("/api/approaches")
-  const pictureLive = useLiveJson<PictureResponse>("/api/picture")
+  const pictureLive = useLiveJson<PictureResponse>("/api/picture", PICTURE_POLL_MS)
   const incidentsLive = useLiveJson<IncidentsResponse>("/api/incidents")
   const controlLive = useLiveJson<ControlPointsResponse>("/api/control-points")
   const warningsLive = useLiveJson<WarningsResponse>(`/api/warnings?lang=${hkoLang(locale)}`)
   const [view, setView] = useState<{ lng: number; lat: number; zoom: number } | null>(null)
-  const kmbUrl =
-    layers.kmb && view && view.zoom >= KMB_MIN_ZOOM
-      ? `/api/kmb?lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}`
+  const kmbQuery =
+    view && view.zoom >= KMB_MIN_ZOOM
+      ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}`
       : null
-  const citybusUrl =
-    layers.citybus && view && view.zoom >= KMB_MIN_ZOOM
-      ? `/api/citybus?lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}`
+  const citybusQuery =
+    view && view.zoom >= KMB_MIN_ZOOM
+      ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}`
       : null
+  const kmbPlacesUrl = layers.kmb && kmbQuery ? `/api/kmb/places?${kmbQuery}` : null
+  const kmbUrl = layers.kmb && kmbQuery ? `/api/kmb?${kmbQuery}` : null
+  const citybusPlacesUrl = layers.citybus && citybusQuery ? `/api/citybus/places?${citybusQuery}` : null
+  const citybusUrl = layers.citybus && citybusQuery ? `/api/citybus?${citybusQuery}` : null
+  const gmbPlacesUrl = layers.gmb && kmbQuery ? `/api/gmb/places?${kmbQuery}` : null
+  const gmbUrl = layers.gmb && kmbQuery ? `/api/gmb?${kmbQuery}` : null
+  const nlbQuery =
+    view && view.zoom >= KMB_MIN_ZOOM && inLantau(view.lng, view.lat)
+      ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}`
+      : null
+  const nlbPlacesUrl = layers.nlb && nlbQuery ? `/api/nlb/places?${nlbQuery}` : null
+  const nlbUrl = layers.nlb && nlbQuery ? `/api/nlb?${nlbQuery}` : null
   const mtrLive = useLiveJson<MtrResponse>("/api/mtr", 15_000)
+  const kmbPlacesLive = useLiveJson<KmbPlacesResponse>(kmbPlacesUrl, PLACE_POLL_MS)
   const kmbLive = useLiveJson<KmbResponse>(kmbUrl, KMB_POLL_MS)
   const lrtLive = useLiveJson<LrtResponse>(layers.lrt ? "/api/lrt" : null, 15_000)
+  const citybusPlacesLive = useLiveJson<CitybusPlacesResponse>(citybusPlacesUrl, PLACE_POLL_MS)
   const citybusLive = useLiveJson<CitybusResponse>(citybusUrl, 60_000)
+  const gmbPlacesLive = useLiveJson<GmbPlacesResponse>(gmbPlacesUrl, PLACE_POLL_MS)
+  const gmbLive = useLiveJson<GmbResponse>(gmbUrl, KMB_POLL_MS)
+  const nlbPlacesLive = useLiveJson<NlbPlacesResponse>(nlbPlacesUrl, PLACE_POLL_MS)
+  const nlbLive = useLiveJson<NlbResponse>(nlbUrl, 60_000)
+  const ferryLive = useLiveJson<FerryResponse>(layers.ferry ? "/api/ferry" : null, 60_000)
+  const kmbMerged = useMemo(
+    () => mergePlaceArrivals(kmbPlacesLive.data, kmbLive.data),
+    [kmbLive.data, kmbPlacesLive.data],
+  )
+  const citybusMerged = useMemo(
+    () => mergePlaceArrivals(citybusPlacesLive.data, citybusLive.data),
+    [citybusLive.data, citybusPlacesLive.data],
+  )
+  const gmbMerged = useMemo(
+    () => mergePlaceArrivals(gmbPlacesLive.data, gmbLive.data),
+    [gmbLive.data, gmbPlacesLive.data],
+  )
+  const nlbMerged = useMemo(
+    () => mergePlaceArrivals(nlbPlacesLive.data, nlbLive.data),
+    [nlbLive.data, nlbPlacesLive.data],
+  )
   const traffic = trafficLive.data
   const approaches = approachesLive.data
   const picture = pictureLive.data
@@ -84,9 +129,12 @@ export function Dashboard() {
   const controlPoints = controlLive.data
   const warnings = warningsLive.data
   const mtr = mtrLive.data
-  const kmb = kmbLive.data
+  const kmb = kmbMerged
   const lrt = lrtLive.data
-  const citybus = citybusLive.data
+  const citybus = citybusMerged
+  const gmb = gmbMerged
+  const nlb = nlbMerged
+  const ferry = ferryLive.data
   const trafficLoading = traffic === null && trafficLive.error === null
   const trafficError = trafficLive.error ?? (traffic && !traffic.ok ? traffic.error ?? "Speed feed failed" : null)
   const pictureError = pictureLive.error ?? picture?.error ?? (picture && !picture.ok ? "Picture failed" : null)
@@ -118,9 +166,12 @@ export function Dashboard() {
         incidents={incidents?.ok ? incidents.incidents : null}
         controlPoints={boundary}
         mtr={mtr?.ok ? mtr : null}
-        kmb={kmb?.ok ? kmb : null}
+        kmb={kmb}
         lrt={lrt?.ok ? lrt : null}
-        citybus={citybus?.ok ? citybus : null}
+        citybus={citybus}
+        gmb={gmb}
+        nlb={nlb}
+        ferry={ferry?.ok ? ferry : null}
         onView={setView}
         layers={layers}
         basemap={basemap}
@@ -177,20 +228,18 @@ export function Dashboard() {
         basemap={basemap}
         counts={{
           speed: null,
-          cameras: picture ? picture.cameras.features.length : null,
+          cameras: null,
           works: picture ? picture.works.features.length : null,
-          tolls: picture ? tunnelCount(picture.tolls) : null,
+          tolls: null,
           incidents: incidents ? incidents.incidents.features.length : null,
-          mtr: mtr?.ok ? mtr.trains.length : null,
+          mtr: null,
           kmb: null,
-          lrt: lrt?.ok ? lrt.trains.length : null,
+          lrt: null,
           citybus: null,
-          control: controlPoints?.ok
-            ? controlPoints.points.features.filter((feature) => {
-                const worst = feature.properties && feature.properties.worst
-                return worst === 1 || worst === 2
-              }).length
-            : null,
+          gmb: null,
+          nlb: null,
+          ferry: null,
+          control: null,
         }}
         onToggle={toggleLayer}
         onBasemap={selectBasemap}
@@ -198,9 +247,12 @@ export function Dashboard() {
         mapLive={mapLive}
         pictureError={pictureError}
         mtrError={mtrLive.error ?? (mtr && !mtr.ok ? mtr.error ?? "Next train feed failed" : null)}
-        kmbError={kmbLive.error ?? (kmb && !kmb.ok ? kmb.error ?? "KMB arrivals failed" : null)}
+        kmbError={liveError(kmbLive.error, kmbLive.data, "KMB arrivals failed")}
         lrtError={lrtLive.error ?? (lrt && !lrt.ok ? lrt.error ?? "Light Rail arrivals failed" : null)}
-        citybusError={citybusLive.error ?? (citybus && !citybus.ok ? citybus.error ?? "Citybus arrivals failed" : null)}
+        citybusError={liveError(citybusLive.error, citybusLive.data, "Citybus arrivals failed")}
+        gmbError={liveError(gmbLive.error, gmbLive.data, "Green minibus arrivals failed")}
+        nlbError={liveError(nlbLive.error, nlbLive.data, "New Lantao Bus arrivals failed")}
+        ferryError={liveError(ferryLive.error, ferryLive.data, "Ferry arrivals failed")}
         aboveMarquee={!intelOpen}
       />
     </main>

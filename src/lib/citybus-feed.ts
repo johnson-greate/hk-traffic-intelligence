@@ -1,12 +1,14 @@
+import { arrivalPairs } from "@/lib/arrival-pairs"
 import { citybusStop, nearestCitybusStops } from "@/lib/citybus-network"
+import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
+import { etaQueue } from "@/lib/polite-fetch"
 import { pool } from "@/lib/pool"
 import { fetchUpstream } from "@/lib/upstream"
-import type { CitybusCall, CitybusResponse, CitybusStopBoard } from "@/lib/types"
+import type { CitybusCall, CitybusPlacesResponse, CitybusResponse, CitybusStopBoard } from "@/lib/types"
 
 const STOP_LIMIT = 6
 const PAIR_BUDGET = 24
 const FETCH_LIMIT = 4
-const REMEMBER_MS = 60_000
 const ETA_ROOT = "https://rt.data.gov.hk/v2/transport/citybus/eta/CTB"
 
 type EtaRow = {
@@ -19,19 +21,38 @@ type EtaRow = {
   rmk_tc?: string
 }
 
-type Remembered = { at: number; rows: EtaRow[] }
+const remembered = new Map<string, HeldRows<EtaRow>>()
 
-const remembered = new Map<string, Remembered>()
+export function loadCitybusPlaces(lng: number, lat: number): CitybusPlacesResponse {
+  const stops: CitybusPlacesResponse["stops"] = []
+  for (const stop of nearestCitybusStops(lng, lat, STOP_LIMIT)) {
+    const record = citybusStop(stop.id)
+    if (!record) continue
+    stops.push({
+      id: stop.id,
+      nameTc: record.tc,
+      nameEn: record.en,
+      lng: record.lng,
+      lat: record.lat,
+      routes: record.routes,
+    })
+  }
+  return { ok: true, stops }
+}
 
+// Poles and the routes on them come from the network file. This only refreshes arrival times.
 export async function loadCitybusNear(lng: number, lat: number, now = Date.now()): Promise<CitybusResponse> {
+  forgetStale(remembered, now)
   const nearest = nearestCitybusStops(lng, lat, STOP_LIMIT)
-  const pairs = arrivalPairs(nearest)
+  const pairs = arrivalPairs(nearest, PAIR_BUDGET)
+  let missed = 0
   await pool(pairs, FETCH_LIMIT, async (pair) => {
     const key = `${pair.stopId}/${pair.route}`
     const cached = remembered.get(key)
-    if (cached && now - cached.at < REMEMBER_MS) return
+    if (!etaDue(cached, now)) return
     const rows = await fetchEta(pair.stopId, pair.route)
     if (rows) remembered.set(key, { at: now, rows })
+    else missed += 1
   })
 
   const stops: CitybusStopBoard[] = []
@@ -40,46 +61,27 @@ export async function loadCitybusNear(lng: number, lat: number, now = Date.now()
     if (!record) continue
     const rows: EtaRow[] = []
     for (const route of stop.routes) {
-      const cached = remembered.get(`${stop.id}/${route}`)
-      if (!cached || now - cached.at > REMEMBER_MS) continue
-      rows.push(...cached.rows)
+      const kept = heldRows(remembered.get(`${stop.id}/${route}`), now)
+      if (kept) rows.push(...kept)
     }
-    const calls = callsAt(rows, now)
-    if (calls.length === 0) continue
-    stops.push({ id: stop.id, nameTc: record.tc, nameEn: record.en, lng: record.lng, lat: record.lat, calls })
+    stops.push({
+      id: stop.id,
+      nameTc: record.tc,
+      nameEn: record.en,
+      lng: record.lng,
+      lat: record.lat,
+      routes: record.routes,
+      calls: callsAt(rows, now),
+    })
   }
-  if (stops.length === 0) {
-    return { ok: false, error: "Citybus arrivals failed", observedAt: null, stops: [] }
+  const error = arrivalFailure(missed, stops.map((stop) => stop.calls.length), "Citybus arrivals failed")
+  return {
+    ok: true,
+    ...(error ? { error } : {}),
+    observedAt: new Date(now).toISOString(),
+    stops,
+    cacheable: missed === 0,
   }
-  return { ok: true, observedAt: new Date(now).toISOString(), stops }
-}
-
-function arrivalPairs(stops: { id: string; routes: string[] }[]): { stopId: string; route: string }[] {
-  const pairs: { stopId: string; route: string }[] = []
-  const seen = new Set<string>()
-  const add = (stopId: string, route: string) => {
-    const key = `${stopId}/${route}`
-    if (seen.has(key) || pairs.length >= PAIR_BUDGET) return
-    seen.add(key)
-    pairs.push({ stopId, route })
-  }
-  const closest = stops[0]
-  if (closest) {
-    for (const route of closest.routes.slice(0, 12)) add(closest.id, route)
-  }
-  const queues = stops.slice(1).map((stop) => ({ id: stop.id, routes: [...stop.routes] }))
-  let added = true
-  while (pairs.length < PAIR_BUDGET && added) {
-    added = false
-    for (const queue of queues) {
-      const route = queue.routes.shift()
-      if (!route) continue
-      add(queue.id, route)
-      added = true
-      if (pairs.length >= PAIR_BUDGET) break
-    }
-  }
-  return pairs
 }
 
 function callsAt(rows: EtaRow[], now: number): CitybusCall[] {
@@ -92,7 +94,6 @@ function callsAt(rows: EtaRow[], now: number): CitybusCall[] {
     const hasEta = Number.isFinite(etaMs)
     const remarkTc = isScheduled(row) ? "" : text(row.rmk_tc)
     const remarkEn = isScheduled(row) ? "" : text(row.rmk_en)
-    if (!hasEta && !remarkTc && !remarkEn) continue
     calls.push({
       route,
       destTc: text(row.dest_tc),
@@ -118,13 +119,13 @@ function text(value: unknown): string {
 
 async function fetchEta(stopId: string, route: string): Promise<EtaRow[] | null> {
   try {
-    const response = await fetchUpstream(`${ETA_ROOT}/${encodeURIComponent(stopId)}/${encodeURIComponent(route)}`, REMEMBER_MS, {
+    const response = await etaQueue(() => fetchUpstream(`${ETA_ROOT}/${encodeURIComponent(stopId)}/${encodeURIComponent(route)}`, ETA_FRESH_MS, {
       timeoutMs: 5_000,
       headers: {
         Accept: "application/json",
         "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
       },
-    })
+    }))
     if (response.status !== 200) return null
     const body = JSON.parse(new TextDecoder().decode(response.body)) as { data?: EtaRow[] }
     return Array.isArray(body.data) ? body.data : []
