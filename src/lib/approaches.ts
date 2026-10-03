@@ -38,7 +38,6 @@ export function readApproachPoints(
     if (!coordinates) continue
     const detail = detailsById[id]
     const legs = legsOf(detail)
-    if (legs.length === 0) continue
     const dated = firstDate(detail)
     if (dated && (!capturedAt || dated > capturedAt)) capturedAt = dated
     const named = text(feature.properties?.LOCATION) || textFromDetail(detail)

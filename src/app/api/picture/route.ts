@@ -1,4 +1,14 @@
-import { camerasFromWfs, tollsFromWfs, withPortalCameras, withTraditionalText, worksFromWfs } from "@/lib/picture"
+import {
+  CAMERA_LAYER_MS,
+  PICTURE_POLL_MS,
+  TOLL_LAYER_MS,
+  WORKS_LAYER_MS,
+  camerasFromWfs,
+  tollsFromWfs,
+  withPortalCameras,
+  withTraditionalText,
+  worksFromWfs,
+} from "@/lib/picture"
 import { fillWorksChinese } from "@/lib/works-chinese"
 import { fetchUpstream } from "@/lib/upstream"
 import type { PictureResponse } from "@/lib/types"
@@ -8,6 +18,7 @@ export const dynamic = "force-dynamic"
 const REFERER = "https://www.hkemobility.gov.hk/en/"
 
 let cache: { expires: number; body: PictureResponse } | null = null
+const layers = new Map<string, { expires: number; features: GeoJSON.FeatureCollection }>()
 
 export async function GET() {
   if (cache && cache.expires > Date.now()) {
@@ -15,11 +26,11 @@ export async function GET() {
   }
 
   const [camerasResult, camerasTcResult, worksResult, worksTcResult, tollsResult] = await Promise.all([
-    loadLayer("DRSS:VW_SNAPSHOT_IMAGE_EN", camerasFromWfs),
-    loadLayer("DRSS:VW_SNAPSHOT_IMAGE_TC", camerasFromWfs),
-    loadLayer("DRSS:VW_ROAD_WORK_EN", worksFromWfs),
-    loadLayer("DRSS:VW_ROAD_WORK_TC", worksFromWfs),
-    loadLayer("DRSS:DRSS_TOLL_POINT", tollsFromWfs),
+    loadLayer("DRSS:VW_SNAPSHOT_IMAGE_EN", camerasFromWfs, CAMERA_LAYER_MS),
+    loadLayer("DRSS:VW_SNAPSHOT_IMAGE_TC", camerasFromWfs, CAMERA_LAYER_MS),
+    loadLayer("DRSS:VW_ROAD_WORK_EN", worksFromWfs, WORKS_LAYER_MS),
+    loadLayer("DRSS:VW_ROAD_WORK_TC", worksFromWfs, WORKS_LAYER_MS),
+    loadLayer("DRSS:DRSS_TOLL_POINT", tollsFromWfs, TOLL_LAYER_MS),
   ])
 
   const errors = [camerasResult.error, worksResult.error, tollsResult.error].filter(
@@ -49,18 +60,24 @@ export async function GET() {
     ),
     tolls: tollsResult.features,
   }
-  cache = { expires: Date.now() + (body.ok ? 30_000 : 10_000), body }
+  cache = { expires: Date.now() + (body.ok ? PICTURE_POLL_MS : 10_000), body }
   return Response.json(body, { status: body.ok ? 200 : 502 })
 }
 
 async function loadLayer(
   typeName: string,
   read: (wfs: unknown) => GeoJSON.FeatureCollection,
+  ttlMs: number,
 ): Promise<{ features: GeoJSON.FeatureCollection; error?: string }> {
+  const hit = layers.get(typeName)
+  if (hit && hit.expires > Date.now()) return { features: hit.features }
   try {
-    const wfs = await readJson(wfsUrl(typeName))
-    return { features: read(wfs) }
+    const wfs = await readJson(wfsUrl(typeName), ttlMs)
+    const features = read(wfs)
+    layers.set(typeName, { expires: Date.now() + ttlMs, features })
+    return { features }
   } catch (error) {
+    if (hit) return { features: hit.features }
     return {
       features: { type: "FeatureCollection", features: [] },
       error: error instanceof Error ? error.message : `${typeName} failed`,
@@ -80,8 +97,8 @@ function wfsUrl(typeName: string): string {
   return `https://www.hkemobility.gov.hk/api/drss/layer/map?${params}`
 }
 
-async function readJson(url: string): Promise<unknown> {
-  const response = await fetchUpstream(url, 30_000, {
+async function readJson(url: string, ttlMs: number): Promise<unknown> {
+  const response = await fetchUpstream(url, ttlMs, {
     timeoutMs: 40_000,
     headers: {
       Accept: "application/json",

@@ -1,10 +1,13 @@
 import { carryArrivalClock, estimateTrains, type TrainObservation } from "@/lib/mtr-estimate"
 import { lrtPoint, lrtRoutes, lrtStation, lrtStationId } from "@/lib/lrt-network"
 import { pool } from "@/lib/pool"
+import { oldestDue } from "@/lib/refresh-slice"
 import { fetchUpstream } from "@/lib/upstream"
 import type { LrtBoard, LrtCalling, LrtResponse, MtrTrain } from "@/lib/types"
 
-const REMEMBER_MS = 15_000
+const REMEMBER_MS = 180_000
+const STALE_MS = 20_000
+const REFRESH_SLICE = 8
 const FETCH_LIMIT = 4
 
 type TrainRow = {
@@ -24,12 +27,12 @@ type Remembered = { at: number; parsed: Parsed }
 
 const remembered = new Map<string, Remembered>()
 
+// Station positions stay in the network file. These calls only refresh arrival minutes.
 export async function loadLrtSnapshot(now = Date.now()): Promise<LrtResponse> {
   const stations = lrtRoutes().flatMap((route) => route.stations)
   const ids = [...new Set(stations)]
-  await pool(ids, FETCH_LIMIT, async (stationId) => {
-    const cached = remembered.get(stationId)
-    if (cached && now - cached.at < REMEMBER_MS) return
+  const due = oldestDue(ids, (stationId) => remembered.get(stationId)?.at ?? null, now, STALE_MS, REFRESH_SLICE)
+  await pool(due, FETCH_LIMIT, async (stationId) => {
     const parsed = await fetchStation(stationId, now)
     if (!parsed) return
     const previous = remembered.get(stationId)

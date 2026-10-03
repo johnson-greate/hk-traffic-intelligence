@@ -15,6 +15,7 @@ import { lineRecord, linesThrough, projectNetworkTrain, stationRecord } from "@/
 import { lrtRoutesThrough, lrtStation } from "@/lib/lrt-network"
 import { isCameraSnapshotUrl } from "@/lib/picture"
 import { isSpeedBand } from "@/lib/speed"
+import { routesWithoutArrival } from "@/lib/stop-routes"
 import type { ApproachPoint, HarbourJourney, LrtResponse, MtrCalling, MtrResponse, SpeedBand } from "@/lib/types"
 
 const TUNNEL_TC: Record<string, string> = {
@@ -212,15 +213,37 @@ function busStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messages, title:
   const heading = readablePlace(displayText(m.locale, textProp(properties, "nameTc"), textProp(properties, "nameEn"))) || title
   const card = openCard(heading)
   const calls = kmbBoard(properties)
-  if (calls.length === 0) {
+  const quiet = routesWithoutArrival(routeList(properties), calls.map((call) => call.route))
+  if (calls.length === 0 && quiet.length === 0) {
     card.body.append(paragraph("city-card-copy", empty))
     return card.root
   }
   const board = document.createElement("div")
   board.className = "city-card-board"
   for (const call of calls) board.append(kmbCall(call, m))
+  for (const route of quiet) board.append(routeOnly(route))
   card.body.append(board)
+  if (calls.length === 0) card.body.append(paragraph("city-card-copy", empty))
   return card.root
+}
+
+function routeOnly(route: string): HTMLElement {
+  const row = document.createElement("div")
+  row.className = "city-card-call"
+  row.append(text("span", "city-card-call-route", route))
+  return row
+}
+
+function routeList(properties: GeoJSON.GeoJsonProperties): string[] {
+  const raw = textProp(properties, "routes")
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is string => typeof item === "string")
+  } catch {
+    return []
+  }
 }
 
 export function citybusStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messages): HTMLElement {
@@ -229,6 +252,18 @@ export function citybusStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messa
 
 export function kmbStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messages): HTMLElement {
   return busStopPopup(properties, m, m.kmb, m.kmbNone)
+}
+
+export function gmbStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messages): HTMLElement {
+  return busStopPopup(properties, m, m.gmb, m.gmbNone)
+}
+
+export function nlbStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messages): HTMLElement {
+  return busStopPopup(properties, m, m.nlb, m.nlbNone)
+}
+
+export function ferryStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messages): HTMLElement {
+  return busStopPopup(properties, m, m.ferry, m.ferryNone)
 }
 
 function kmbCall(call: KmbBoardCall, m: Messages): HTMLElement {
@@ -249,7 +284,7 @@ function kmbCall(call: KmbBoardCall, m: Messages): HTMLElement {
 
 const PLACE_ACRONYMS = new Set(["BBI", "MTR", "KMB", "LWB", "HK", "PTI", "GMB", "CTB", "NWFB"])
 
-function readablePlace(value: string): string {
+export function readablePlace(value: string): string {
   const shaped = /[\u4e00-\u9fff]/.test(value) ? value.replace(/,/g, "，") : value
   const letters = shaped.replace(/[^A-Za-z]/g, "")
   if (!letters || letters !== letters.toUpperCase()) return shaped

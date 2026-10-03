@@ -6,9 +6,9 @@
 
 香港智慧城市交通情報網
 
-This is a Hong Kong Smart City dashboard. It brings the live city together on one map: the harbour crossings, the strategic roads, MTR and Light Rail trains, KMB, Long Win and Citybus arrivals, the land boundary waits, and Observatory weather.
+This is a Hong Kong Smart City dashboard. It brings the live city together on one map: the harbour crossings, the strategic roads, MTR and Light Rail trains, KMB, Long Win, Citybus, green minibus and New Lantao Bus arrivals, the ferry piers, the land boundary waits, and Observatory weather.
 
-This map is possible because the Hong Kong Government publishes these feeds as open data. The Transport Department, the Immigration Department, the Observatory, and the teams behind HKeMobility and DATA.GOV.HK release the figures to the public, alongside MTR, KMB, Long Win, and Citybus, and this site simply reads them together.
+This map is possible because the Hong Kong Government publishes these feeds as open data. The Transport Department, the Immigration Department, the Observatory, and the teams behind HKeMobility and DATA.GOV.HK release the figures to the public, alongside MTR, KMB, Long Win, Citybus, the green minibus operators, New Lantao Bus, Sun Ferry, Hong Kong and Kowloon Ferry, and the Star Ferry, and this site simply reads them together.
 
 Open it at [hktraffic.keith-li.workers.dev](https://hktraffic.keith-li.workers.dev). There is no account to create and nothing to install. The site opens in Traditional Chinese. Simplified Chinese and English are available from the language switch beside the clock.
 
@@ -32,11 +32,11 @@ For crossing the harbour and driving in town, the dashboard starts with the esse
 
 For going through the boundary and checking the weather, the next group follows. The eight land control points show the passenger halls for residents and visitors, arriving and departing, together with the live speed on the strategic road that leads to each port. Lo Wu serves passengers rather than private cars, so its published figures include no private car queue. Every Observatory warning in force is listed. On a quiet day the site still reports the Observatory temperature and whether rain fell in the past hour.
 
-For catching a train or a bus, the dashboard works the same way. MTR lines are drawn on the map and each train moves from the next-train minutes, destination, and platform that MTR publishes. Light Rail keeps its own tracks through Tuen Mun, Yuen Long, and Tin Shui Wai, and each train moves from the minutes published for those stations. KMB and Long Win stops show the published arrival, including trips marked as scheduled because no live position is available yet. Long Win in this feed covers the airport and Tung Chung routes, including the A, E, S, N, NA, and R series. Citybus stops show the published arrival across Hong Kong Island and the other routes Citybus runs.
+For catching a train or a bus, the dashboard works the same way. MTR lines are drawn on the map and each train moves from the next-train minutes, destination, and platform that MTR publishes. Light Rail keeps its own tracks through Tuen Mun, Yuen Long, and Tin Shui Wai, and each train moves from the minutes published for those stations. KMB and Long Win stops show the published arrival, including trips marked as scheduled because no live position is available yet. Long Win in this feed covers the airport and Tung Chung routes, including the A, E, S, N, NA, and R series. Citybus stops show the published arrival across Hong Kong Island and the other routes Citybus runs. Green minibus stops show the route numbers from the Transport Department catalogue, and the arrival clock when one is published. New Lantao Bus stops appear when the map is looking at Lantau. Ferry piers for the Star Ferry, Sun Ferry, and Hong Kong and Kowloon Ferry stay on the map. The Star Ferry shows how often the boat runs. Sun Ferry and Hong Kong and Kowloon Ferry show the next sailing, and a Sun Ferry boat is drawn when that feed includes a position.
 
 When several things need attention at once, the site puts them in order. An open traffic notice, a road graded Bad, a very busy hall, or a weather warning rises to the top, so the urgent item is read first.
 
-Hong Kong publishes far more open data than this Smart City dashboard uses. What appears here is the traffic, boundary, weather, MTR, Light Rail, KMB, Long Win, and Citybus coverage listed further down.
+Hong Kong publishes far more open data than this Smart City dashboard uses. What appears here is the traffic, boundary, weather, MTR, Light Rail, KMB, Long Win, Citybus, green minibus, New Lantao Bus, and ferry coverage listed further down.
 
 ## Open source
 
@@ -64,7 +64,7 @@ The application is written with Next.js, React, MapLibre GL, and Tailwind CSS, a
 
 ## How the site stays light
 
-Everyone who opens the public site reads from one shared copy of each feed, held on Cloudflare for the whole city. Trains are renewed about every fifteen seconds, KMB and Long Win about every thirty seconds, and Citybus and the remaining feeds about once a minute. While a copy is still current, the next visitor is served from it. A fresh request goes to the publishing organisation only when that copy falls due for renewal. Many people can therefore read the dashboard at once, at the pace those organisations already publish, and the site does not add load to government servers.
+Everyone who opens the public site reads from one shared copy of each feed, held on Cloudflare for the whole city. Trains are renewed about every fifteen seconds, KMB and Long Win about every thirty seconds, and Citybus, green minibus, New Lantao Bus, the ferries, and the remaining feeds about once a minute. Green minibus and New Lantao Bus are read only for the stops in the current view. A map of Kowloon does not ask New Lantao Bus for arrivals. While a copy is still current, the next visitor is served from it. A fresh request goes to the publishing organisation only when that copy falls due for renewal. Many people can therefore read the dashboard at once, at the pace those organisations already publish, and the site does not add load to government servers.
 
 ## Where the numbers come from
 
@@ -85,13 +85,18 @@ Each row is one part of the dashboard and the publication it is drawn from. This
 | The next Light Rail train | [Light Rail next train](https://data.gov.hk/en-data/dataset/mtr-lrnt_data-light-rail-nexttrain-data) |
 | The next KMB or Long Win arrival | [Estimated time of arrival for KMB and LWB](https://data.etabus.gov.hk/v1/transport/kmb/stop) |
 | The next Citybus arrival | [Citybus next bus](https://data.gov.hk/en-data/dataset/ctb-eta-transport-realtime-eta) |
+| The next green minibus arrival | Transport Department [green minibus arrival data](https://data.etagmb.gov.hk/route/HKI) |
+| The next New Lantao Bus arrival | [New Lantao Bus estimated arrivals](https://rt.data.gov.hk/v2/transport/nlb/route.php?action=list) |
+| Sun Ferry sailings | [Sun Ferry estimated arrival](https://www.sunferry.com.hk/eta/?route=CECC) |
+| Hong Kong and Kowloon Ferry sailings | [Hong Kong and Kowloon Ferry open data](https://www.hkkfeta.com/opendata/route) |
+| Star Ferry frequency | [Central to Tsim Sha Tsui timetable](https://www.starferry.com.hk/sites/default/files/upload/open_data/csv/ferry_sf_central_tsimshatsui_timetable_eng.csv) |
 | Warnings, temperature, and rainfall | Hong Kong Observatory [warning summary](https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=en) and [regional weather report](https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=en) |
 | Street map and buildings | [OSM Bright](https://github.com/openmaptiles/osm-bright-gl-style) and [OSM Liberty](https://github.com/maputnik/osm-liberty), served by [OpenFreeMap](https://openfreemap.org), from [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors and [OpenMapTiles](https://openmaptiles.org/) |
 | Satellite photograph | [Esri World Imagery](https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer). Imagery © Esri |
 
 ## Author
 
-[Keith Li](https://www.linkedin.com/in/keithlihk) made this Smart City dashboard for Agentic Engineer classes, for public talks, and for guest lectures. It is possible because the Transport Department, the Immigration Department, the Observatory, MTR, KMB, Long Win, Citybus, and the teams behind HKeMobility already publish these figures for the public.
+[Keith Li](https://www.linkedin.com/in/keithlihk) made this Smart City dashboard for Agentic Engineer classes, for public talks, and for guest lectures. It is possible because the Transport Department, the Immigration Department, the Observatory, MTR, KMB, Long Win, Citybus, New Lantao Bus, Sun Ferry, Hong Kong and Kowloon Ferry, the Star Ferry, and the teams behind HKeMobility already publish these figures for the public.
 
 If you have used the map, please [star the repository](https://github.com/keithligh/hk-traffic-intelligence). That star is how the next reader finds this Smart City project.
 

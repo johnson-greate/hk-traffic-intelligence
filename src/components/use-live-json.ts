@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { nextReading } from "@/lib/last-reading"
 
 export function useLiveJson<T extends { ok: boolean }>(url: string | null, intervalMs = 60_000): { data: T | null; error: string | null } {
   const [data, setData] = useState<T | null>(null)
@@ -21,8 +22,9 @@ export function useLiveJson<T extends { ok: boolean }>(url: string | null, inter
           setError(`Unexpected response (${response.status})`)
           return
         }
-        setData(body as T)
-        setError(null)
+        const incoming = body as T
+        setData((current) => nextReading(current, incoming))
+        setError(incoming.ok ? null : readingError(incoming, response.status))
       } catch (cause) {
         if (cancelled || request !== generation) return
         setError(cause instanceof Error ? cause.message : "Request failed")
@@ -39,6 +41,11 @@ export function useLiveJson<T extends { ok: boolean }>(url: string | null, inter
 
   if (!url) return { data: null, error: null }
   return { data, error }
+}
+
+function readingError(body: { ok: boolean }, status: number): string {
+  if ("error" in body && typeof body.error === "string" && body.error) return body.error
+  return `Feed failed (${status})`
 }
 
 function hasOk(value: unknown): value is { ok: boolean } {

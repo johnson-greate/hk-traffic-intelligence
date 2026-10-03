@@ -1,0 +1,19 @@
+{
+  "piers": [
+    {"id": "star-central", "nameTc": "中環天星碼頭", "nameEn": "Central Star Ferry", "lng": 114.16119, "lat": 22.28704},
+    {"id": "star-tst", "nameTc": "尖沙咀天星碼頭", "nameEn": "Tsim Sha Tsui Star Ferry", "lng": 114.16799, "lat": 22.29354},
+    {"id": "star-wanchai", "nameTc": "灣仔碼頭", "nameEn": "Wan Chai Ferry Pier", "lng": 114.1758, "lat": 22.28209},
+    {"id": "sun-central", "nameTc": "中環五號碼頭", "nameEn": "Central Pier 5", "lng": 114.1578, "lat": 22.2869},
+    {"id": "sun-cheung-chau", "nameTc": "長洲碼頭", "nameEn": "Cheung Chau Ferry Pier", "lng": 114.02834, "lat": 22.20858},
+    {"id": "sun-mui-wo", "nameTc": "梅窩碼頭", "nameEn": "Mui Wo Ferry Pier", "lng": 114.00231, "lat": 22.26512},
+    {"id": "sun-north-point", "nameTc": "北角碼頭", "nameEn": "North Point Ferry Pier", "lng": 114.20163, "lat": 22.29294},
+    {"id": "sun-hung-hom", "nameTc": "紅磡碼頭", "nameEn": "Hung Hom Ferry Pier", "lng": 114.19025, "lat": 22.30112},
+    {"id": "sun-kowloon-city", "nameTc": "九龍城碼頭", "nameEn": "Kowloon City Ferry Pier", "lng": 114.19431, "lat": 22.31784},
+    {"id": "hkkf-central", "nameTc": "中環四號碼頭", "nameEn": "Central Pier 4", "lng": 114.1569, "lat": 22.2866},
+    {"id": "hkkf-central-6", "nameTc": "中環六號碼頭", "nameEn": "Central Pier 6", "lng": 114.1587, "lat": 22.2872},
+    {"id": "hkkf-sok-kwu-wan", "nameTc": "索罟灣碼頭", "nameEn": "Sok Kwu Wan Ferry Pier", "lng": 114.1315, "lat": 22.2044},
+    {"id": "hkkf-yung-shue-wan", "nameTc": "榕樹灣碼頭", "nameEn": "Yung Shue Wan Ferry Pier", "lng": 114.1108, "lat": 22.2267},
+    {"id": "hkkf-peng-chau", "nameTc": "坪洲碼頭", "nameEn": "Peng Chau Ferry Pier", "lng": 114.03711, "lat": 22.28458},
+    {"id": "hkkf-hei-ling-chau", "nameTc": "喜靈洲", "nameEn": "Hei Ling Chau", "lng": 114.029, "lat": 22.2515}
+  ]
+}
