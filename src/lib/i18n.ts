@@ -137,6 +137,7 @@ export type Messages = {
   incidentsLayer: string
   replay: string
   basemap: string
+  layers: string
   speedKey: string
   pictureFailed: string
   mapFailed: string
@@ -296,6 +297,7 @@ const en: Messages = {
   incidentsLayer: "Incidents",
   replay: "Replay",
   basemap: "Basemap",
+  layers: "Layers",
   speedKey: "Official traffic class. Good, average, and bad are the Transport Department saturation levels.",
   pictureFailed: "The camera and works picture did not load.",
   mapFailed: "The satellite map did not start. Crossing minutes and network speed stay on screen.",
@@ -455,6 +457,7 @@ const zhHK: Messages = {
   incidentsLayer: "事故",
   replay: "重播",
   basemap: "底圖",
+  layers: "圖層",
   speedKey: "運輸署交通狀況等級：暢順、緩慢、擠塞。",
   pictureFailed: "未能載入快拍及工程畫面。",
   mapFailed: "衛星地圖未能啟動。過海時間與路網車速仍會顯示。",
@@ -610,6 +613,7 @@ const zhCN: Messages = {
   incidentsLayer: "事故",
   replay: "重播",
   basemap: "底图",
+  layers: "图层",
   speedKey: "运输署交通状况等级：畅顺、缓慢、挤塞。",
   pictureFailed: "未能载入快拍及工程画面。",
   mapFailed: "卫星地图未能启动。过海时间与路网车速仍会显示。",
