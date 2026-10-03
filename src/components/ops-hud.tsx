@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import { flushSync } from "react-dom"
+import { createPortal, flushSync } from "react-dom"
 import { useI18n } from "@/components/locale"
 import { boundaryGlance } from "@/lib/control-points"
 import { crossingsFrom, nearestApproach } from "@/lib/crossings"
@@ -499,11 +499,28 @@ function OriginMenu(props: {
 }) {
   const { locale, messages: m } = useI18n()
   const [open, setOpen] = useState(false)
+  const [box, setBox] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const place = () => {
+      const rect = rootRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const width = Math.min(352, window.innerWidth - 16)
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+      const top = Math.round(rect.bottom + 4)
+      setBox({ top, left: Math.round(left), width: Math.round(width), maxHeight: Math.max(160, window.innerHeight - top - 8) })
+    }
+    place()
+    window.addEventListener("resize", place)
+    return () => window.removeEventListener("resize", place)
+  }, [open])
   useEffect(() => {
     if (!open) return
     const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      const target = event.target as Node
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false)
     }
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false)
@@ -538,15 +555,24 @@ function OriginMenu(props: {
           {props.pinnedId ? road : m.followMap(road)}
         </span>
       </button>
-      {open ? (
-        <div role="listbox" aria-label={m.harbourFrom} className="absolute top-full left-0 z-30 mt-1 max-h-80 w-[22rem] overflow-y-auto border border-cyan-200/30 bg-[#041018] p-1 text-sm text-white shadow-[0_0_24px_rgba(34,211,238,0.12)]">
-          <OriginChoice selected={props.pinnedId == null} onChoose={() => choose(null)}>
-            {m.followMap(props.nearest ? displayText(locale, props.nearest.nameTc, props.nearest.name) : "")}
-          </OriginChoice>
-          <OriginList label={m.fromIsland} points={props.island} pinnedId={props.pinnedId} onChoose={choose} />
-          <OriginList label={m.fromKowloon} points={props.kowloon} pinnedId={props.pinnedId} onChoose={choose} />
-        </div>
-      ) : null}
+      {open && box
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="listbox"
+              aria-label={m.harbourFrom}
+              style={{ top: box.top, left: box.left, width: box.width, maxHeight: box.maxHeight }}
+              className="fixed z-50 overflow-y-auto border border-cyan-200/30 bg-[#041018] p-1 text-sm text-white shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+            >
+              <OriginChoice selected={props.pinnedId == null} onChoose={() => choose(null)}>
+                {m.followMap(props.nearest ? displayText(locale, props.nearest.nameTc, props.nearest.name) : "")}
+              </OriginChoice>
+              <OriginList label={m.fromIsland} points={props.island} pinnedId={props.pinnedId} onChoose={choose} />
+              <OriginList label={m.fromKowloon} points={props.kowloon} pinnedId={props.pinnedId} onChoose={choose} />
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
