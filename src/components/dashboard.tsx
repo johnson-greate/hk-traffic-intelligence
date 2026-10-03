@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { BriefingCard } from "@/components/briefing-card"
 import { CityMap } from "@/components/city-map"
 import { LayerDock } from "@/components/layer-dock"
 import { OpsHud } from "@/components/ops-hud"
@@ -180,6 +181,7 @@ export function Dashboard() {
         disabled={mapDown}
         onMap={setMapLive}
       />
+      <BriefingCard />
       <OpsHud
         traffic={traffic}
         trafficLoading={trafficLoading}
