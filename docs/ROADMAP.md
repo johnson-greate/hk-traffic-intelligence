@@ -43,7 +43,7 @@
 
 | 狀態 | 項目 | 內容 | PR |
 | --- | --- | --- | --- |
-| ✅ | 課程教材 | `docs/course/`：五課，由 PR #1、#2 的真實經過寫成（fork、branch／PR、先寫測試、部署、向 Claude Code 下指示） | [#3](https://github.com/johnson-greate/hk-traffic-intelligence/pull/3) |
+| ✅ | 老師參考教材 | `docs/teacher/`：五課，由 PR #1、#2 的真實經過寫成（fork、branch／PR、先寫測試、部署、向 Claude Code 下指示） | [#3](https://github.com/johnson-greate/hk-traffic-intelligence/pull/3) |
 | ✅ | CI | GitHub Actions `checks`：每個 PR 跑 lint、typecheck、`npm test` | [#6](https://github.com/johnson-greate/hk-traffic-intelligence/pull/6) |
 | ✅ | Cron 診斷 | 快照每步計時、60 秒上限，失敗時寫 log；找出斷開原因是免費計劃 CPU 上限 | [#7](https://github.com/johnson-greate/hk-traffic-intelligence/pull/7) |
 | ✅ | Lint 忽略打包輸出 | 部署後 `npm run lint` 不再掃 `.cloudflare/` | [#8](https://github.com/johnson-greate/hk-traffic-intelligence/pull/8) |

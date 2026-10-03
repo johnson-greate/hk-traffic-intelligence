@@ -1,5 +1,7 @@
 # 課程指南：用 Claude Code 和 GitHub 改進一個真實項目
 
+> **老師參考。** 這五課的內容（ruleset、先寫測試、Cloudflare 部署等）超出學員所需。學員請看 [學員指南](../STUDENT_GUIDE.md)；處理學員 issue 的方法見 [handling-issues.md](handling-issues.md)。
+
 這份指南是 AI Trade Training Course 的教材。內容不是虛構的練習，而是這個 repo 實際發生過的事：由 fork 原項目開始，經兩個 Pull Request 加入新功能，再部署到 Cloudflare，最後在上線後發現一個問題。每一課都附上真實的 commit 和 PR 連結，學員可以打開對照。
 
 ## 適合誰
@@ -47,7 +49,7 @@
 你也可以直接叫 Claude Code 讀這些檔案，例如：
 
 ```text
-讀 docs/course/02-branch-commit-pr.md，然後帶我做練習。每一步先解釋，等我確認才執行。
+讀 docs/teacher/02-branch-commit-pr.md，然後帶我做練習。每一步先解釋，等我確認才執行。
 ```
 
 ## 一個貫穿全課程的原則
