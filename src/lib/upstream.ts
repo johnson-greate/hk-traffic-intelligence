@@ -24,27 +24,12 @@ async function readThrough(url: string, ttlMs: number, options: UpstreamOptions)
   const shared = await readShared(url, ttlMs)
   if (shared) return shared
 
-  const seconds = Math.max(1, Math.round(ttlMs / 1000))
-  let response: Response
-  try {
-    // vinext's fetch adds cache: no-store inside force-dynamic routes, and
-    // Cloudflare rejects cacheTtl together with no-store. The saved fetch is
-    // the one that can keep the response.
-    response = await rawFetch()(url, {
-      signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
-      headers: options.headers,
-      cf: {
-        cacheEverything: true,
-        cacheTtl: seconds,
-        cacheTtlByStatus: { "200-299": seconds, "300-599": 0 },
-      },
-    } as RequestInit)
-  } catch {
-    response = await rawFetch()(url, {
-      signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
-      headers: options.headers,
-    })
-  }
+  // One cache only. fetch() with cacheTtl and cache.put of the same URL wait on
+  // each other, and the request never produces a response.
+  const response = await rawFetch()(url, {
+    signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
+    headers: options.headers,
+  })
 
   const contentType = response.headers.get("content-type") ?? ""
   const bytes = await response.arrayBuffer()

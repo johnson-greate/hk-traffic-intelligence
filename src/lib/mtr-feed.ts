@@ -15,7 +15,8 @@ const FETCH_LIMIT = 4
 type Remembered = { at: number; board: MtrBoard; observations: TrainObservation[] }
 
 const remembered = new Map<string, Remembered>()
-const MEMORY_URL = "https://hktraffic.keith-li.workers.dev/internal/mtr-board-memory"
+// Not this worker's host. A cache key on our own host can wait on the request that is writing it.
+const MEMORY_URL = "https://hktraffic-cache.invalid/mtr-board-memory"
 let blockedUntil = 0
 let failures = 0
 
