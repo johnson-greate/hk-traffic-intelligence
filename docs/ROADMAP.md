@@ -17,7 +17,7 @@
 
 | 狀態 | 項目 | 內容 | 工作量 | PR |
 | --- | --- | --- | --- | --- |
-| ✅ | 快照存儲 | Cloudflare Cron 每 5 分鐘把全城車速、各路段車速和過海時間存入 D1，保留 30 日；`/api/history` 讀取最近 48 小時。2026-10-02 22:35 起在線上累積數據 | 中 | [#2](https://github.com/johnson-greate/hk-traffic-intelligence/pull/2) |
+| ✅ | 快照存儲 | Cloudflare Cron 每 5 分鐘把全城車速、各路段車速和過海時間存入 D1，保留 30 日；`/api/history` 讀取最近 48 小時。2026-10-02 22:35 起在線上累積數據。⚠️ Cron 間歇被取消，數據有斷開，見已知問題 | 中 | [#2](https://github.com/johnson-greate/hk-traffic-intelligence/pull/2) |
 | ⬜ | 「比平時」基準 | 以歷史快照計算同一時段的正常值，顯示「比平時慢 40%」。需要先累積一至兩星期數據 | 中 | |
 | ⬜ | 24 小時回放 | 時間軸 slider，播放全城交通變化。需要先累積 24 小時數據 | 中至大 | |
 
@@ -61,3 +61,4 @@
 - 手機版底部的圖層按鈕與情報面板重疊（原有問題）。
 - 天空與地面交界是一條硬邊。霧化需要 3D 地形才能柔化，而地圖目前關閉了地形。
 - `traffic.resource.hk` 未綁定。`resource.hk` 在另一個 Cloudflare 帳號，該帳號未有 Workers 權限；Worker 與域名須在同一帳號。
+- 快照 Cron 間歇被取消（outcome canceled，CPU 8 ms，wall 200 秒），數據會連續斷開幾個鐘。原因未確定，詳情見 `docs/handover/handover_20261003_1030.md`。24 小時回放同「比平時」需要先解決呢個問題。
