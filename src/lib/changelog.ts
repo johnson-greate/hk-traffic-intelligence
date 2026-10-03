@@ -16,9 +16,9 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
     id: "2026-10-03-top-bar",
     date: "2026-10-03",
     kind: "improved",
-    en: "The speed stays on the top bar with the tunnel times.",
-    tc: "車速與隧道時間同列在頂欄。",
-    sc: "车速与隧道时间同列在顶栏。",
+    en: "On a phone, the top bar is one line.",
+    tc: "在手機上，頂欄是一行。",
+    sc: "在手机上，顶栏是一行。",
   },
   {
     id: "2026-10-03-phone-layout",

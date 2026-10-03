@@ -217,24 +217,14 @@ export function OpsHud(props: OpsHudProps) {
       )}
       <header
         data-map-chrome="top"
-        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-col gap-1 overflow-x-clip border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[64rem]/hud:flex-row @min-[64rem]/hud:items-center lg:right-4 lg:left-16 ${
+        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-row items-center gap-1 overflow-x-clip border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:flex-col sm:items-stretch sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[64rem]/hud:flex-row @min-[64rem]/hud:items-center lg:right-4 lg:left-16 ${
           barOpen ? "" : "max-sm:hidden"
         }`}
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 sm:gap-3">
-          <div className="flex w-full items-center gap-1.5 sm:contents">
-            <div className="min-w-0 flex-1 sm:flex-none">
-              <p className="hidden font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.18em] text-cyan-200/80 uppercase sm:block">{m.productMark}</p>
-              <p className="font-[family-name:var(--font-hud)] text-sm leading-tight text-white">{m.productName}</p>
-            </div>
-            <button
-              type="button"
-              aria-expanded={barOpen}
-              onClick={() => setBarOpen(false)}
-              className="shrink-0 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
-            >
-              {m.hide}
-            </button>
+        <div className="flex shrink-0 items-center gap-1 sm:min-w-0 sm:flex-wrap sm:gap-3">
+          <div className="min-w-0 max-w-14 sm:max-w-none">
+            <p className="hidden font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.18em] text-cyan-200/80 uppercase sm:block">{m.productMark}</p>
+            <p className="truncate font-[family-name:var(--font-hud)] text-sm leading-tight text-white">{m.productName}</p>
           </div>
           <div className="shrink-0">
             <p className="font-[family-name:var(--font-hud)] text-sm text-cyan-50 tabular-nums">{clock}</p>
@@ -244,7 +234,7 @@ export function OpsHud(props: OpsHudProps) {
               {props.mapLive ? "" : ` · ${m.mapOff}`}
             </p>
           </div>
-          <div className="inline-flex shrink-0 border border-white/15" role="group" aria-label={m.language}>
+          <div className="hidden shrink-0 border border-white/15 sm:inline-flex" role="group" aria-label={m.language}>
             {LOCALES.map((item) => (
               <button
                 key={item}
@@ -263,7 +253,7 @@ export function OpsHud(props: OpsHudProps) {
             type="button"
             aria-expanded={open && tab === "notes"}
             onClick={() => show("notes", undefined)}
-            className="shrink-0 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50"
+            className="hidden shrink-0 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 sm:inline-flex"
           >
             {m.changelog}
           </button>
@@ -305,6 +295,29 @@ export function OpsHud(props: OpsHudProps) {
               onClick={() => show("weather", undefined)}
             />
           ) : null}
+          <div className="inline-flex shrink-0 border border-white/15 sm:hidden" role="group" aria-label={m.language}>
+            {LOCALES.map((item) => (
+              <button
+                key={`bar-${item}`}
+                type="button"
+                aria-pressed={locale === item}
+                onClick={() => setLocale(item)}
+                className={`px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] ${
+                  locale === item ? "bg-white/10 text-white" : "text-cyan-100/70"
+                }`}
+              >
+                {LOCALE_MARK[item]}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-expanded={open && tab === "notes"}
+            onClick={() => show("notes", undefined)}
+            className="shrink-0 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 sm:hidden"
+          >
+            {m.changelog}
+          </button>
           </div>
           <button
             type="button"
@@ -325,6 +338,14 @@ export function OpsHud(props: OpsHudProps) {
                 </div>
               ) : null}
             </div>
+          </button>
+          <button
+            type="button"
+            aria-expanded={barOpen}
+            onClick={() => setBarOpen(false)}
+            className="shrink-0 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
+          >
+            {m.hide}
           </button>
         </div>
       </header>
