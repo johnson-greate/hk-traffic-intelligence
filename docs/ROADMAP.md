@@ -50,10 +50,10 @@
 
 ## 第五階段：AI 功能
 
-| 狀態 | 項目 | 內容 | 工作量 |
-| --- | --- | --- | --- |
-| ⬜ | AI 城市簡報 | LLM 每 15 分鐘生成一段交通概況 | 中 |
-| ⬜ | 自然語言問答 | 例如「我 7 點去機場，邊條路好？」 | 大 |
+| 狀態 | 項目 | 內容 | 工作量 | PR |
+| --- | --- | --- | --- | --- |
+| ✅ | AI 城市簡報 | 右上角卡片，一至三句講全城交通（繁／簡／英）。DeepSeek 主力、Claude Haiku 4.5 後備；每 15 分鐘一次、全體訪客共用。經 `SELF` binding 讀數據以避開免費計劃子請求上限 | 中 | [#13](https://github.com/johnson-greate/hk-traffic-intelligence/pull/13)、[#14](https://github.com/johnson-greate/hk-traffic-intelligence/pull/14)、[#15](https://github.com/johnson-greate/hk-traffic-intelligence/pull/15)、[#16](https://github.com/johnson-greate/hk-traffic-intelligence/pull/16) |
+| ⬜ | 自然語言問答 | 例如「我 7 點去機場，邊條路好？」 | 大 | |
 
 ## 部署
 
@@ -72,3 +72,5 @@
 - `traffic.resource.hk` 未綁定。`resource.hk` 在另一個 Cloudflare 帳號，該帳號未有 Workers 權限；Worker 與域名須在同一帳號。
 - **Cloudflare 免費計劃 CPU 上限（每次 10 ms）不足。** 2026-10-03 用 `wrangler tail` 證實：每次快照 Cron 用 110–210 ms CPU，會間歇以 `exceededCpu` 被停止，數據因此斷開幾個鐘；訪客請求亦一樣，約一小時內有 75 次失敗（九巴、城巴、快拍最多）。決定：暫時維持免費計劃，接受斷續。升級 Workers Paid（US$5／月，CPU 上限 30 秒）即可解決，無需改程式。回放會有空檔，「比平時」需要累積更長時間。
 - 英文介面在手機闊度下，頂部語言切換按鈕右邊被裁走少許（原有問題）。
+- 免費計劃：交通 JSON 間中喺傳送途中被截斷（`Unterminated string in JSON at position …`），係 CPU 超標被 Cloudflare 停止，非程式錯誤；升級 Workers Paid 可解決（需老闆批）。
+- 已向原作者提交 4 個 PR（keithligh/hk-traffic-intelligence #3 至 #6），截至 2026-10-03 晚未有回覆。
