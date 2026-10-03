@@ -13,6 +13,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    id: "2026-10-03-bus-direction",
+    date: "2026-10-03",
+    kind: "fixed",
+    en: "When a bus operator publishes where a bus is going, that destination is written on the stop sign. Nearby signs no longer cover one another.",
+    tc: "巴士營運商有公布目的地時，站牌會寫上該班車前往的地點。相近的站牌不再疊在一起。",
+    sc: "巴士营运商有公布目的地时，站牌会写上该班车前往的地点。相近的站牌不再叠在一起。",
+  },
+  {
     id: "2026-10-03-harbour-from",
     date: "2026-10-03",
     kind: "improved",

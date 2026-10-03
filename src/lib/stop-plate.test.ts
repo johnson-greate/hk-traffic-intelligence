@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { shortStopTitle, stopPlate } from "./stop-plate.ts"
+import { directedRouteMarks, shortStopTitle, stopPlate } from "./stop-plate.ts"
 
 assert.equal(shortStopTitle("屯門公路巴士轉乘站(上層), 屯門公路"), "上層")
 assert.equal(shortStopTitle("屯門公路巴士轉乘站(下層), 青山公路"), "下層")
@@ -19,3 +19,20 @@ assert.deepEqual(lower.lines, ["952 952C 962", "N952"])
 const town = stopPlate("置樂花園, 青山公路", ["962X", "952", "B3", "962C"])
 assert.equal(town.lines[0], "952 962C 962X")
 assert.equal(town.lines.join(" ").split(" ").includes("962"), false)
+
+const headed = directedRouteMarks(
+  ["118", "613", "8X"],
+  [
+    { route: "118", dest: "往小西灣" },
+    { route: "118", dest: "往小西灣" },
+    { route: "613", dest: "" },
+  ],
+)
+assert.equal(headed.directed, true)
+assert.deepEqual(headed.marks, ["118 往小西灣", "613", "8X"])
+const plate = stopPlate("興華邨裕興樓", headed.marks, { perLine: 1, keepOrder: true })
+assert.equal(plate.lines[0], "118 往小西灣")
+assert.equal(plate.lines.includes("613"), true)
+
+const unnamed = directedRouteMarks([], [{ route: "49S", dest: "往屯門兆康苑" }])
+assert.deepEqual(unnamed.marks, ["49S 往屯門兆康苑"])

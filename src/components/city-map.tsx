@@ -36,9 +36,9 @@ import {
   trainPopup,
   workPopup,
 } from "@/components/map-cards"
-import { stopPlate, stopPlateKey, type StopPlate } from "@/lib/stop-plate"
+import { directedRouteMarks, stopPlate, stopPlateKey, type StopPlate } from "@/lib/stop-plate"
 import { GMB_MIN_ZOOM, KMB_MIN_ZOOM, kmbViewKey } from "@/lib/kmb-view"
-import { displayText, type Locale, type Messages } from "@/lib/i18n"
+import { displayText, MESSAGES, type Locale, type Messages } from "@/lib/i18n"
 import { lineRecord, mtrStationCollection, mtrTrackCollection, stationPoint, stationRecord } from "@/lib/mtr-network"
 import { lrtColor, lrtPoint, lrtRoutesThrough, lrtStation, lrtStationCollection, lrtTrackCollection } from "@/lib/lrt-network"
 import { ferryPierFeatures } from "@/lib/ferry-network"
@@ -834,12 +834,21 @@ function stopPlateIconId(plate: StopPlate, stroke: string): string {
   return `stop-plate-${stroke.slice(1)}-${encodeURIComponent(stopPlateKey(plate))}`
 }
 
-function placeStopPlate(map: Map, name: string, routes: string[], stroke: string): string {
-  const plate = stopPlate(name, routes)
+function placeStopPlate(map: Map, name: string, routes: string[], stroke: string, options?: { perLine?: number; keepOrder?: boolean }): string {
+  const plate = stopPlate(name, routes, options)
   if (!plate.title && plate.lines.length === 0) return ""
   const icon = stopPlateIconId(plate, stroke)
   ensureStopPlate(map, icon, plate, stroke)
   return map.hasImage(icon) ? icon : ""
+}
+
+function busPlate(map: Map, locale: Locale, name: string, routes: string[], calls: { route: string; destTc: string; destEn: string }[], stroke: string): string {
+  const towards = MESSAGES[locale].towards
+  const { marks, directed } = directedRouteMarks(routes, calls.map((call) => {
+    const place = readablePlace(displayText(locale, call.destTc, call.destEn))
+    return { route: call.route, dest: place ? towards(place) : "" }
+  }))
+  return placeStopPlate(map, name, marks, stroke, directed ? { perLine: 1, keepOrder: true } : undefined)
 }
 
 function withTrainMarks(
@@ -1082,7 +1091,7 @@ function addOverlay(map: Map, layer: Parameters<Map["addLayer"]>[0], before: str
   else map.addLayer(layer)
 }
 
-function addStopLabel(map: Map, id: string, source: string, before: string | undefined, minzoom = LABEL_MIN_ZOOM) {
+function addStopLabel(map: Map, id: string, source: string, before: string | undefined, minzoom = LABEL_MIN_ZOOM, allowOverlap = true) {
   addOverlay(map, {
     id,
     type: "symbol",
@@ -1093,8 +1102,8 @@ function addStopLabel(map: Map, id: string, source: string, before: string | und
       "icon-image": ["get", "icon"],
       "icon-anchor": "bottom",
       "icon-offset": [0, -10],
-      "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
+      "icon-allow-overlap": allowOverlap,
+      "icon-ignore-placement": allowOverlap,
       "icon-pitch-alignment": "viewport",
       "icon-rotation-alignment": "viewport",
     },
@@ -1444,7 +1453,7 @@ function addWatchLayers(map: Map, before: string | undefined) {
       "circle-pitch-alignment": "map",
     },
   }, before)
-  addStopLabel(map, "kmb-stop-label", "kmb-stops", before)
+  addStopLabel(map, "kmb-stop-label", "kmb-stops", before, LABEL_MIN_ZOOM, false)
   addOverlay(map, {
     id: "lrt-track-casing",
     type: "line",
@@ -1506,7 +1515,7 @@ function addWatchLayers(map: Map, before: string | undefined) {
       "circle-pitch-alignment": "map",
     },
   }, before)
-  addStopLabel(map, "citybus-stop-label", "citybus-stops", before)
+  addStopLabel(map, "citybus-stop-label", "citybus-stops", before, LABEL_MIN_ZOOM, false)
   addOverlay(map, {
     id: "gmb-stops",
     type: "circle",
@@ -1520,7 +1529,7 @@ function addWatchLayers(map: Map, before: string | undefined) {
       "circle-pitch-alignment": "map",
     },
   }, before)
-  addStopLabel(map, "gmb-stop-label", "gmb-stops", before, GMB_MIN_ZOOM)
+  addStopLabel(map, "gmb-stop-label", "gmb-stops", before, GMB_MIN_ZOOM, false)
   addOverlay(map, {
     id: "nlb-stops",
     type: "circle",
@@ -1534,7 +1543,7 @@ function addWatchLayers(map: Map, before: string | undefined) {
       "circle-pitch-alignment": "map",
     },
   }, before)
-  addStopLabel(map, "nlb-stop-label", "nlb-stops", before)
+  addStopLabel(map, "nlb-stop-label", "nlb-stops", before, LABEL_MIN_ZOOM, false)
   addOverlay(map, {
     id: "ferry-piers",
     type: "circle",
@@ -1660,8 +1669,7 @@ function busStopCollection(map: Map, board: CitybusResponse, locale: Locale, lab
     type: "FeatureCollection",
     features: board.stops.map((stop) => {
       const name = readablePlace(displayText(locale, stop.nameTc, stop.nameEn))
-      const marks = stop.routes.length > 0 ? stop.routes : stop.calls.map((call) => call.route)
-      const icon = labels ? placeStopPlate(map, name, marks, stroke) : ""
+      const icon = labels ? busPlate(map, locale, name, stop.routes, stop.calls, stroke) : ""
       return {
         type: "Feature" as const,
         geometry: { type: "Point" as const, coordinates: [stop.lng, stop.lat] },
@@ -1716,8 +1724,7 @@ function kmbStopCollection(map: Map, kmb: KmbResponse, locale: Locale, labels: b
     type: "FeatureCollection",
     features: kmb.stops.map((stop) => {
       const name = readablePlace(displayText(locale, stop.nameTc, stop.nameEn))
-      const marks = stop.routes.length > 0 ? stop.routes : stop.calls.map((call) => call.route)
-      const icon = labels ? placeStopPlate(map, name, marks, "#9f1239") : ""
+      const icon = labels ? busPlate(map, locale, name, stop.routes, stop.calls, "#9f1239") : ""
       return {
         type: "Feature" as const,
         geometry: { type: "Point" as const, coordinates: [stop.lng, stop.lat] },
