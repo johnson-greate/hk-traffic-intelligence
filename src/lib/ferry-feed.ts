@@ -1,4 +1,5 @@
 import { ferryCalls, ferryMinutes, starSailings } from "@/lib/ferry-clock"
+import { estimateFerryVessels, type FerryMark, type FerryTrack } from "@/lib/ferry-run"
 import { fortuneDepartureTimes, nextFortuneDepartures } from "@/lib/fortune-timetable"
 import { SUN_ROUTES } from "@/lib/ferry-routes"
 import { etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
@@ -115,12 +116,82 @@ function ferryBoard(now: number, fresh: boolean): FerryResponse {
     calls: (byPier.get(pier.id) ?? []).sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999)).slice(0, 6),
   }))
   const moving: FerryVessel[] = []
+  const gpsRoutes = new Set<string>()
   for (const item of vessels.values()) {
     for (const vessel of heldRows(item, now) ?? []) {
-      if (vessel) moving.push({ ...vessel, minutes: ferryMinutes(vessel.eta, now) })
+      if (!vessel) continue
+      gpsRoutes.add(vessel.route)
+      moving.push({ ...vessel, minutes: ferryMinutes(vessel.eta, now) })
     }
   }
+  const marks: FerryMark[] = []
+  for (const item of clocks.values()) {
+    for (const row of heldRows(item, now) ?? []) marks.push(row)
+  }
+  moving.push(...estimateFerryVessels(ferryTracks(), marks, gpsRoutes, pierPoint, now))
   return { ok: true, observedAt: new Date(now).toISOString(), piers: boards, vessels: moving, cacheable: fresh }
+}
+
+function ferryTracks(): FerryTrack[] {
+  const tracks: FerryTrack[] = SUN_ROUTES.map((route) => ({
+    route: route.code,
+    fromId: route.from,
+    toId: route.to,
+    fromTc: route.fromTc,
+    fromEn: route.fromEn,
+    toTc: route.destTc,
+    toEn: route.destEn,
+    destTc: route.destTc,
+  }))
+  for (const route of HKKF_ROUTES) {
+    tracks.push({
+      route: String(route.id),
+      fromId: route.from,
+      toId: route.to,
+      fromTc: route.fromTc,
+      fromEn: route.fromEn,
+      toTc: route.toTc,
+      toEn: route.toEn,
+      destTc: route.toTc,
+    })
+    tracks.push({
+      route: String(route.id),
+      fromId: route.to,
+      toId: route.from,
+      fromTc: route.toTc,
+      fromEn: route.toEn,
+      toTc: route.fromTc,
+      toEn: route.fromEn,
+      destTc: route.fromTc,
+    })
+  }
+  for (const leg of FORTUNE_LEGS) {
+    const toId = leg.destination === "17" ? "fortune-kwun-tong" : leg.destination === "16" ? "sun-north-point" : ""
+    const to = toId === "fortune-kwun-tong"
+      ? { tc: "觀塘", en: "Kwun Tong" }
+      : toId === "sun-north-point"
+        ? { tc: "北角", en: "North Point" }
+        : { tc: leg.destTc, en: leg.destEn }
+    const from = leg.pierId === "sun-north-point"
+      ? { tc: "北角", en: "North Point" }
+      : { tc: "觀塘", en: "Kwun Tong" }
+    tracks.push({
+      route: "富裕",
+      fromId: leg.pierId,
+      toId,
+      fromTc: from.tc,
+      fromEn: from.en,
+      toTc: to.tc,
+      toEn: to.en,
+      destTc: leg.destTc,
+    })
+  }
+  return tracks
+}
+
+function pierPoint(id: string): { lng: number; lat: number } | null {
+  const pier = piers.find((item) => item.id === id)
+  return pier ? { lng: pier.lng, lat: pier.lat } : null
 }
 
 async function fetchSun(route: (typeof SUN_ROUTES)[number]): Promise<SunFix | null> {

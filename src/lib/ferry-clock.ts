@@ -12,15 +12,12 @@ export type FerryClockCall = {
   scheduled: boolean
 }
 
-export function ferryMinutes(eta: string, now: number): number | null {
+export function ferryInstant(eta: string, now: number): number | null {
   const trimmed = eta.trim()
   if (!trimmed) return null
   if (trimmed.includes("T")) {
     const iso = Date.parse(trimmed)
-    if (!Number.isFinite(iso)) return null
-    // A dated time already in the past is not the next sailing. A minute or two of clock skew still counts as due.
-    if (iso < now - 2 * 60_000) return null
-    return Math.max(0, Math.round((iso - now) / 60_000))
+    return Number.isFinite(iso) ? iso : null
   }
   const match = /(\d{1,2}):(\d{2})/.exec(trimmed)
   if (!match?.[1] || !match[2]) return null
@@ -30,11 +27,13 @@ export function ferryMinutes(eta: string, now: number): number | null {
   if (/am/i.test(trimmed) && hours === 12) hours = 0
   const hongKong = new Date(now + 8 * 60 * 60 * 1000)
   const instant = Date.UTC(hongKong.getUTCFullYear(), hongKong.getUTCMonth(), hongKong.getUTCDate(), hours, minutes) - 8 * 60 * 60 * 1000
-  if (instant < now - 2 * 60_000) {
-    // A clock from the previous morning is the next sailing. One that left a few minutes ago stays off the board.
-    if (now - instant <= 12 * 60 * 60 * 1000) return null
-    return Math.round((instant + 24 * 60 * 60 * 1000 - now) / 60_000)
-  }
+  if (now - instant > 12 * 60 * 60 * 1000) return instant + 24 * 60 * 60 * 1000
+  return instant
+}
+
+export function ferryMinutes(eta: string, now: number): number | null {
+  const instant = ferryInstant(eta, now)
+  if (instant == null || instant < now - 2 * 60_000) return null
   return Math.max(0, Math.round((instant - now) / 60_000))
 }
 

@@ -40,8 +40,8 @@ export function ferryVesselFeatures(clock: FerryResponse | null): GeoJSON.Featur
           routes: JSON.stringify([]),
           board: JSON.stringify([{
             route: vessel.route,
-            destTc: sailing?.destTc ?? "",
-            destEn: sailing?.destEn ?? "",
+            destTc: vessel.destTc || sailing?.destTc || "",
+            destEn: vessel.destEn || sailing?.destEn || "",
             originTc: "",
             originEn: "",
             arriving: false,

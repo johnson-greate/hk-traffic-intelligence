@@ -301,6 +301,8 @@ export type FerryVessel = {
   route: string
   eta: string
   minutes: number | null
+  destTc?: string
+  destEn?: string
 }
 
 export type FerryResponse = {
