@@ -30,6 +30,14 @@ assert.equal(request.body.model, "jev-latest")
 assert.deepEqual(request.body.state, { facts: "facts here", answer: "answer here" })
 assert.equal((request.body.questions as Record<string, { type: string }>).unsupported.type, "noul")
 
+// The same check through OpenRouter, for a deployment that holds an OpenRouter key.
+const viaRouter = jevGuard("or-key", fakeFetch, "openrouter")
+assert.equal(await viaRouter("f", "a"), 0.77)
+const routed = sent as unknown as { url: string; body: Record<string, unknown>; auth: string }
+assert.equal(routed.url, "https://openrouter.ai/api/alpha/decisions")
+assert.equal(routed.auth, "Bearer or-key")
+assert.equal(routed.body.model, "~typesafe/jev-latest")
+
 // Any Jev failure means "could not say", never a crash.
 assert.equal(await jevGuard("k", async () => new Response("down", { status: 529 }))("f", "a"), null)
 assert.equal(await jevGuard("k", async () => Promise.reject(new Error("offline")))("f", "a"), null)

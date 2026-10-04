@@ -9,7 +9,7 @@ import { fastestCrossings, type BriefingInput } from "@/lib/briefing-facts"
 import type { ApproachesResponse, ControlPointsResponse, IncidentsResponse, TrafficResponse, WarningsResponse } from "@/lib/types"
 
 export type Env = Record<string, unknown> & { SELF?: { fetch: (request: Request) => Promise<Response> } }
-export type AiKeys = { deepseek?: string; anthropic?: string; typesafe?: string }
+export type AiKeys = { deepseek?: string; anthropic?: string; typesafe?: string; openrouter?: string }
 export type Load = (path: string) => Promise<Response>
 
 export type CityFeeds = {
@@ -34,7 +34,7 @@ export function aiKeys(env: Env): AiKeys {
     const value = env[name] ?? process.env[name]
     return typeof value === "string" && value.length > 0 ? value : undefined
   }
-  return { deepseek: pick("DEEPSEEK_API_KEY"), anthropic: pick("ANTHROPIC_API_KEY"), typesafe: pick("TYPESAFE_API_KEY") }
+  return { deepseek: pick("DEEPSEEK_API_KEY"), anthropic: pick("ANTHROPIC_API_KEY"), typesafe: pick("TYPESAFE_API_KEY"), openrouter: pick("OPENROUTER_API_KEY") }
 }
 
 // On Cloudflare each feed is read through the SELF binding, one request each: read in-process,

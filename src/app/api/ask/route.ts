@@ -45,7 +45,8 @@ export async function POST(request: Request) {
   try {
     const feeds = await readCityFeeds(feedLoader(env, new URL(request.url).origin), true)
     const facts = askFacts(askInput(feeds))
-    const guard = keys.typesafe ? jevGuard(keys.typesafe) : null
+    // Jev checks answers with a TypeSafe key, or an OpenRouter key as AGENTS.md describes.
+    const guard = keys.typesafe ? jevGuard(keys.typesafe) : keys.openrouter ? jevGuard(keys.openrouter, fetch, "openrouter") : null
     const result = await answerQuestion(question, facts, locale, keys, undefined, guard)
     const body: AskBody = {
       ok: true,

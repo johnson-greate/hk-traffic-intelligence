@@ -37,16 +37,24 @@ export function questionKey(question: string, locale: Locale, now = Date.now()):
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
-// TypeSafe's System One API (https://docs.typesafe.ai/api.md), asked one noul question.
-export function jevGuard(key: string, fetcher: Fetch = fetch): (facts: string, answer: string) => Promise<number | null> {
+// Jev answers the same request at TypeSafe (https://docs.typesafe.ai/api.md) and through
+// OpenRouter; only the address and the model name differ.
+const JEV_ROUTES = {
+  typesafe: { url: "https://api.typesafe.ai/v1/systemone", model: "jev-latest" },
+  openrouter: { url: "https://openrouter.ai/api/alpha/decisions", model: "~typesafe/jev-latest" },
+} as const
+
+// One noul question: does the answer say anything the facts do not support?
+export function jevGuard(key: string, fetcher: Fetch = fetch, via: keyof typeof JEV_ROUTES = "typesafe"): (facts: string, answer: string) => Promise<number | null> {
+  const route = JEV_ROUTES[via]
   return async (facts, answer) => {
     try {
-      const response = await fetcher("https://api.typesafe.ai/v1/systemone", {
+      const response = await fetcher(route.url, {
         method: "POST",
         signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "jev-latest",
+          model: route.model,
           state: { facts, answer },
           questions: {
             unsupported: {
