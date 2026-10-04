@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { askFacts } from "./ask-facts.ts"
+import { askFacts, otherSign } from "./ask-facts.ts"
 import type { AskInput } from "./ask-facts.ts"
 
 const leg = (code: string, minutes: number | null) => ({ code, name: code, minutes, colour: "green" as const })
@@ -64,6 +64,12 @@ assert.ok(askFacts({ ...input, starts: [...input.starts, { id: "K08", name: "Kai
   "Reference, fixed: 將軍澳 Tseung Kwan O is on the Kowloon side; nearest start 啓祥道西行近九龍灣消防總局",
 ))
 
+// The sign the top bar is showing, so an answer can use the same minutes as the bar.
+const withBar = askFacts({ ...input, barStartId: "H1" }).split("\n")
+assert.ok(withBar.includes("Top bar now shows the three tunnels from 告士打道東行近稅務大樓 (Gloucester Road eastbound near Revenue Tower), the start nearest the visitor's map"))
+assert.ok(!facts.some((line) => line.startsWith("Top bar")), "no top bar line when the sign is unknown")
+assert.ok(!askFacts({ ...input, barStartId: "NOPE" }).includes("Top bar"), "an unknown id is ignored")
+
 // Missing feeds are stated, so the model says it does not know instead of guessing.
 const empty = askFacts({ ...input, traffic: null, starts: [], halls: null })
 assert.match(empty, /Road network: no reading/)
@@ -71,3 +77,16 @@ assert.match(empty, /Harbour crossing times: no reading/)
 assert.match(empty, /Boundary control points: no reading/)
 
 console.log("ask facts ok")
+
+// When the answer works from another start than the top bar's, the box says so in code:
+// the model did not reliably mention it.
+const starts = [
+  { id: "K02", name: "Gascoigne Road eastbound", nameTc: "加士居道東行近香港理工大學", coordinates: [0, 0] as [number, number], legs: [] },
+  { id: "K08", name: "Kai Cheung Road westbound", nameTc: "啓祥道西行近九龍灣消防總局", coordinates: [0, 0] as [number, number], legs: [] },
+]
+assert.deepEqual(otherSign("新蒲崗最近起點為啓祥道西行近九龍灣消防總局，最快為西隧。", starts, "K02"), { tc: "加士居道東行近香港理工大學", en: "Gascoigne Road eastbound" })
+assert.equal(otherSign("由加士居道東行近香港理工大學出發，東隧最快。", starts, "K02"), null, "the bar's own start")
+assert.equal(otherSign("From Gascoigne Road eastbound, the EHC is fastest.", starts, "K02"), null, "English names count")
+assert.equal(otherSign("羅湖現時正常。", starts, "K02"), null, "no start named")
+assert.equal(otherSign("啓祥道西行近九龍灣消防總局最快。", starts, null), null, "bar sign unknown")
+console.log("ask facts other sign ok")

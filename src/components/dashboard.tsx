@@ -185,7 +185,7 @@ export function Dashboard() {
         disabled={mapDown}
         onMap={setMapLive}
       />
-      <BriefingCard />
+      <BriefingCard view={view} />
       <OpsHud
         traffic={traffic}
         trafficLoading={trafficLoading}

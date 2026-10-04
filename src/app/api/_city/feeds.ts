@@ -5,7 +5,8 @@ import { GET as getIncidents } from "@/app/api/incidents/route"
 import { GET as getTraffic } from "@/app/api/traffic/route"
 import { GET as getWarnings } from "@/app/api/warnings/route"
 import type { AskInput } from "@/lib/ask-facts"
-import { fastestCrossings, type BriefingInput } from "@/lib/briefing-facts"
+import type { BriefingInput } from "@/lib/briefing-facts"
+import { nearestApproach } from "@/lib/crossings"
 import type { ApproachesResponse, ControlPointsResponse, IncidentsResponse, TrafficResponse, WarningsResponse } from "@/lib/types"
 
 export type Env = Record<string, unknown> & { SELF?: { fetch: (request: Request) => Promise<Response> } }
@@ -53,17 +54,19 @@ export function feedLoader(env: Env, origin: string): Load {
 }
 
 // A feed that fails is null, so the AI is told what is missing rather than the whole answer failing.
-export async function readCityFeeds(load: Load, withBoundary: boolean): Promise<CityFeeds> {
-  const read = async <T,>(path: string): Promise<T | null> => {
-    try {
-      const response = await load(path)
-      if (!response.ok) return null
-      const body = (await response.json()) as T & { ok?: boolean }
-      return body.ok === false ? null : body
-    } catch {
-      return null
-    }
+export async function readFeed<T>(load: Load, path: string): Promise<T | null> {
+  try {
+    const response = await load(path)
+    if (!response.ok) return null
+    const body = (await response.json()) as T & { ok?: boolean }
+    return body.ok === false ? null : body
+  } catch {
+    return null
   }
+}
+
+export async function readCityFeeds(load: Load, withBoundary: boolean): Promise<CityFeeds> {
+  const read = <T,>(path: string) => readFeed<T>(load, path)
   const [traffic, approaches, incidents, warnings, controlPoints] = await Promise.all([
     read<TrafficResponse>("/api/traffic"),
     read<ApproachesResponse>("/api/approaches"),
@@ -79,7 +82,6 @@ export function briefingInput(feeds: CityFeeds): BriefingInput {
   return {
     at: new Date(),
     traffic: feeds.traffic,
-    crossings: fastestCrossings(feeds.approaches?.points ?? []),
     incidents: (feeds.incidents?.incidents.features ?? []).map((feature) => {
       const p = (feature.properties ?? {}) as Record<string, string | undefined>
       return { tc: p.nameTc ?? "", en: p.name ?? "", whereTc: p.location ?? "", whereEn: p.locationEn ?? "" }
@@ -89,8 +91,9 @@ export function briefingInput(feeds: CityFeeds): BriefingInput {
   }
 }
 
-// The parts of the feeds a question is answered from: every start and every boundary hall.
-export function askInput(feeds: CityFeeds): AskInput {
+// The parts of the feeds a question is answered from: every start and every boundary hall,
+// and the start the top bar shows for the visitor's map centre (the bar's own rule).
+export function askInput(feeds: CityFeeds, centre: { lng: number; lat: number } | null): AskInput {
   const base = briefingInput(feeds)
   return {
     at: base.at,
@@ -100,5 +103,11 @@ export function askInput(feeds: CityFeeds): AskInput {
     warnings: base.warnings,
     conditions: base.conditions,
     halls: feeds.controlPoints ? feeds.controlPoints.points.features : null,
+    barStartId: barStart(feeds.approaches, centre),
   }
+}
+
+// The start the top bar shows for a map centre: the bar's own rule, nearestApproach.
+export function barStart(approaches: ApproachesResponse | null, centre: { lng: number; lat: number } | null): string | null {
+  return centre ? (nearestApproach(approaches?.points ?? [], centre)?.id ?? null) : null
 }

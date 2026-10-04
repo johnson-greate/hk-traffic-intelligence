@@ -30,9 +30,11 @@ export class RateLimit {
   }
 }
 
-export function questionKey(question: string, locale: Locale, now = Date.now()): string {
+// The top bar's sign is part of the key: the same question can have a different answer
+// for a visitor looking at another part of the map.
+export function questionKey(question: string, locale: Locale, now = Date.now(), sign = ""): string {
   const normal = question.trim().replace(/\s+/g, " ").toLowerCase()
-  return `${locale}|${Math.floor(now / CACHE_WINDOW_MS)}|${normal}`
+  return `${locale}|${Math.floor(now / CACHE_WINDOW_MS)}|${sign}|${normal}`
 }
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>

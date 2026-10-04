@@ -13,6 +13,8 @@ export type AskInput = {
   warnings: { name: string }[]
   conditions: WeatherConditions | null
   halls: GeoJSON.Feature[] | null
+  // The start the top bar is showing (nearest the visitor's map), when known.
+  barStartId?: string | null
 }
 
 const TUNNEL: Record<string, string> = {
@@ -66,6 +68,8 @@ export function askFacts(input: AskInput): string {
     return [`Harbour crossing times from ${start.nameTc} (${start.name}): ${legs.map((leg) => `${TUNNEL[leg.code]} ${leg.minutes} min`).join(", ")}`]
   })
   lines.push(...(crossingLines.length > 0 ? crossingLines : ["Harbour crossing times: no reading"]))
+  const bar = input.starts.find((start) => start.id === input.barStartId)
+  if (bar) lines.push(`Top bar now shows the three tunnels from ${bar.nameTc} (${bar.name}), the start nearest the visitor's map`)
   for (const start of input.starts) {
     const area = START_AREAS[start.id]
     if (!area || !start.legs.some((leg) => leg.code in TUNNEL && leg.minutes != null)) continue
@@ -103,4 +107,15 @@ export function askFacts(input: AskInput): string {
     }
   }
   return lines.join("\n")
+}
+
+// The top bar's start, when the answer names a different start and not the bar's, so the box
+// can say why its minutes differ from the bar.
+export function otherSign(answer: string, starts: ApproachPoint[], barStartId: string | null | undefined): { tc: string; en: string } | null {
+  const bar = starts.find((start) => start.id === barStartId)
+  if (!bar) return null
+  const names = (start: ApproachPoint) => [start.nameTc, start.name].filter(Boolean)
+  if (names(bar).some((name) => answer.includes(name))) return null
+  const namesAnother = starts.some((start) => start.id !== bar.id && names(start).some((name) => answer.includes(name)))
+  return namesAnother ? { tc: bar.nameTc, en: bar.name } : null
 }

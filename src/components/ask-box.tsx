@@ -5,11 +5,21 @@ import { useI18n } from "@/components/locale"
 import type { Locale } from "@/lib/i18n"
 
 type AskReply =
-  | { ok: true; answerable: boolean; answer: string; basis: string[]; provider: "deepseek" | "anthropic"; checked: boolean; caution: boolean }
+  | {
+      ok: true
+      answerable: boolean
+      answer: string
+      basis: string[]
+      provider: "deepseek" | "anthropic"
+      checked: boolean
+      caution: boolean
+      // Set when the answer works from another start than the one the top bar shows.
+      barSign: { tc: string; en: string } | null
+    }
   | { ok: false; code: string; error: string }
 
 // Kept here rather than in i18n.ts, which changes often upstream.
-const LABEL: Record<Locale, Record<"ask" | "placeholder" | "send" | "thinking" | "basis" | "checked" | "caution" | "rate" | "unreliable" | "failed" | "tooLong", string>> = {
+const LABEL: Record<Locale, Record<"ask" | "placeholder" | "send" | "thinking" | "basis" | "checked" | "caution" | "rate" | "unreliable" | "failed" | "tooLong" | "barSign", string>> = {
   "zh-HK": {
     ask: "問 AI",
     placeholder: "例如：我在銅鑼灣，過海走哪條隧道最快？",
@@ -22,6 +32,7 @@ const LABEL: Record<Locale, Record<"ask" | "placeholder" | "send" | "thinking" |
     unreliable: "未能可靠回答這條問題，請直接看地圖上的資料。",
     failed: "暫時未能回答，請稍後再試。",
     tooLong: "問題最多 200 字。",
+    barSign: "頂部列現時顯示「{sign}」的時間，與此答案的起點不同。",
   },
   "zh-CN": {
     ask: "问 AI",
@@ -35,6 +46,7 @@ const LABEL: Record<Locale, Record<"ask" | "placeholder" | "send" | "thinking" |
     unreliable: "未能可靠回答这条问题，请直接看地图上的资料。",
     failed: "暂时未能回答，请稍后再试。",
     tooLong: "问题最多 200 字。",
+    barSign: "顶部栏现时显示「{sign}」的时间，与此答案的起点不同。",
   },
   en: {
     ask: "Ask AI",
@@ -48,12 +60,13 @@ const LABEL: Record<Locale, Record<"ask" | "placeholder" | "send" | "thinking" |
     unreliable: "This could not be answered reliably; please read the map.",
     failed: "Could not answer just now; try again shortly.",
     tooLong: "At most 200 characters.",
+    barSign: "The top bar is showing times from {sign}, a different start from this answer.",
   },
 }
 
 const MAX_QUESTION = 200
 
-export function AskBox() {
+export function AskBox(props: { centre: { lng: number; lat: number } | null }) {
   const { locale } = useI18n()
   const label = LABEL[locale]
   const [question, setQuestion] = useState("")
@@ -70,7 +83,8 @@ export function AskBox() {
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text, locale }),
+        // The map centre lets the answer use the same roadside sign as the top bar.
+        body: JSON.stringify({ question: text, locale, centre: props.centre }),
       })
       setReply((await response.json()) as AskReply)
     } catch {
@@ -105,14 +119,14 @@ export function AskBox() {
       </form>
       <div aria-live="polite">
         {busy ? <p className="mt-1.5 text-xs text-zinc-400">{label.thinking}</p> : null}
-        {reply ? <Reply reply={reply} label={label} /> : null}
+        {reply ? <Reply reply={reply} label={label} locale={locale} /> : null}
       </div>
     </div>
   )
 }
 
-function Reply(props: { reply: AskReply; label: (typeof LABEL)[Locale] }) {
-  const { reply, label } = props
+function Reply(props: { reply: AskReply; label: (typeof LABEL)[Locale]; locale: Locale }) {
+  const { reply, label, locale } = props
   if (!reply.ok) {
     const text = reply.code === "rate" ? label.rate : reply.code === "unreliable" ? label.unreliable : reply.code === "too-long" ? label.tooLong : label.failed
     return <p className="mt-1.5 text-xs text-amber-200">{text}</p>
@@ -120,6 +134,7 @@ function Reply(props: { reply: AskReply; label: (typeof LABEL)[Locale] }) {
   return (
     <div className="mt-1.5">
       <p className="text-sm leading-snug text-white">{reply.answer}</p>
+      {reply.barSign ? <p className="mt-1 text-xs text-cyan-100/80">{label.barSign.replace("{sign}", locale === "en" ? reply.barSign.en : reply.barSign.tc)}</p> : null}
       {reply.caution ? <p className="mt-1 text-xs text-amber-200">{label.caution}</p> : null}
       {reply.basis.length > 0 ? (
         <details className="mt-1 text-xs text-zinc-400">
