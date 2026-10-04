@@ -1,14 +1,25 @@
-// Sends one System One request to Jev through OpenRouter and prints the JSON response.
+// Sends one System One request to Jev and prints the JSON response.
+// With TYPESAFE_API_KEY it calls TypeSafe directly (https://docs.typesafe.ai/api.md);
+// otherwise it goes through OpenRouter with OPENROUTER_API_KEY.
 // Questions are sent as given. This script does not rewrite them.
 // Model page: https://openrouter.ai/~typesafe/jev-latest
 
-const endpoint = "https://openrouter.ai/api/alpha/decisions"
+// Keys may live in .env; variables already set in the shell win.
+try {
+  process.loadEnvFile(".env")
+} catch {
+  // No .env here.
+}
 
-const key = process.env.OPENROUTER_API_KEY
+const typesafe = process.env.TYPESAFE_API_KEY
+const key = typesafe || process.env.OPENROUTER_API_KEY
 if (!key) {
-  console.error("Set OPENROUTER_API_KEY before asking Jev.")
+  console.error("Set TYPESAFE_API_KEY or OPENROUTER_API_KEY before asking Jev.")
   process.exit(1)
 }
+const endpoint = typesafe ? "https://api.typesafe.ai/v1/systemone" : "https://openrouter.ai/api/alpha/decisions"
+// The same model is "jev-latest" at TypeSafe and "~typesafe/jev-latest" at OpenRouter.
+const defaultModel = typesafe ? "jev-latest" : "~typesafe/jev-latest"
 
 const inputPath = process.argv[2]
 const raw = inputPath
@@ -25,18 +36,20 @@ if (!request.questions || typeof request.questions !== "object" || Array.isArray
 
 const body = {
   state: request.state,
-  model: request.model ?? "~typesafe/jev-latest",
+  model: typesafe ? (request.model ?? defaultModel).replace(/^~typesafe\//, "") : (request.model ?? defaultModel),
   questions: request.questions,
 }
 
 const response = await fetch(endpoint, {
   method: "POST",
-  headers: {
-    Authorization: `Bearer ${key}`,
-    "Content-Type": "application/json",
-    "HTTP-Referer": "https://origin.cursor.com/git/keithli/opentransport",
-    "X-Title": "Harbour corridors",
-  },
+  headers: typesafe
+    ? { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }
+    : {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://origin.cursor.com/git/keithli/opentransport",
+        "X-Title": "Harbour corridors",
+      },
   body: JSON.stringify(body),
 })
 
