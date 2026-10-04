@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useSyncExternalStore } from "react"
+import { AskBox } from "@/components/ask-box"
 import { useI18n } from "@/components/locale"
 import { useLiveJson } from "@/components/use-live-json"
 import type { Briefing, Provider } from "@/lib/briefing-llm"
@@ -42,10 +43,11 @@ export function BriefingCard() {
   return (
     <section
       aria-label={label.title}
-      className="pointer-events-auto absolute top-[var(--map-control-top,4.75rem)] right-2 z-[5] w-[min(20rem,calc(100%-1rem))] sm:right-3 lg:right-4"
+      // Above the intel panel and layer dock (z-10) while open, below the start picker (z-50): the visitor is using it, and Hide closes it.
+      className={`pointer-events-auto absolute top-[var(--map-control-top,4.75rem)] right-2 w-[min(20rem,calc(100%-1rem))] sm:right-3 lg:right-4 ${open ? "z-20" : "z-[5]"}`}
     >
       {open ? (
-        <div className="border border-cyan-200/30 bg-[#041018]/88 p-2 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md">
+        <div className="max-h-[min(70dvh,34rem)] overflow-y-auto border border-cyan-200/30 bg-[#041018]/95 p-2 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md">
           <div className="flex items-center justify-between gap-2">
             <p className="font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.18em] text-cyan-200/80 uppercase">
               {label.title} · {time}
@@ -63,6 +65,7 @@ export function BriefingCard() {
           <p className="mt-1.5 text-right font-[family-name:var(--font-hud)] text-[0.58rem] text-zinc-400">
             {label.note} · {PROVIDER[data.provider]}
           </p>
+          <AskBox />
         </div>
       ) : (
         <button

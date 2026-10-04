@@ -1,10 +1,6 @@
-import { GET as getApproaches } from "@/app/api/approaches/route"
-import { GET as getIncidents } from "@/app/api/incidents/route"
-import { GET as getTraffic } from "@/app/api/traffic/route"
-import { GET as getWarnings } from "@/app/api/warnings/route"
-import { briefingFacts, fastestCrossings, type BriefingInput } from "@/lib/briefing-facts"
-import { writeBriefing, type Briefing, type BriefingKeys, type Provider } from "@/lib/briefing-llm"
-import type { ApproachesResponse, IncidentsResponse, TrafficResponse, WarningsResponse } from "@/lib/types"
+import { aiKeys, briefingInput, feedLoader, readCityFeeds, workerEnv } from "@/app/api/_city/feeds"
+import { briefingFacts } from "@/lib/briefing-facts"
+import { writeBriefing, type Briefing, type Provider } from "@/lib/briefing-llm"
 
 export const dynamic = "force-dynamic"
 
@@ -17,18 +13,17 @@ type BriefingResponse =
 
 const memory = new Map<number, BriefingResponse>()
 
-type Env = Record<string, unknown> & { SELF?: { fetch: (request: Request) => Promise<Response> } }
-
 export async function GET(request: Request) {
   const env = await workerEnv()
-  const keys = providerKeys(env)
+  const keys = aiKeys(env)
   // Not configured is a normal state for a deployment without AI, so it is not an HTTP error.
   if (!keys.deepseek && !keys.anthropic) return json({ ok: false, error: "No AI provider key is set" }, 200, "public, max-age=300")
   const window = Math.floor(Date.now() / WINDOW_MS)
   const kept = memory.get(window) ?? (await readShared(window))
   if (kept) return json(kept)
   try {
-    const facts = briefingFacts(await gatherFacts(feedLoader(env, new URL(request.url).origin)))
+    const feeds = await readCityFeeds(feedLoader(env, new URL(request.url).origin), false)
+    const facts = briefingFacts(briefingInput(feeds))
     const written = await writeBriefing(facts, keys)
     const body: BriefingResponse = { ok: true, at: new Date().toISOString(), ...written }
     memory.clear()
@@ -38,65 +33,6 @@ export async function GET(request: Request) {
   } catch (error) {
     return json({ ok: false, error: error instanceof Error ? error.message : "Briefing failed" }, 502)
   }
-}
-
-// On Cloudflare each feed is read through the SELF binding, one request each: read in-process,
-// the four feeds together passed the free plan's 50 subrequests per invocation on a cold cache.
-// The Node dev server has no binding, so it calls the routes directly.
-function feedLoader(env: Env, origin: string): (path: string) => Promise<Response> {
-  const self = env.SELF
-  if (self) return (path) => self.fetch(new Request(`${origin}${path}`))
-  return (path) => {
-    if (path.startsWith("/api/traffic")) return getTraffic(new Request(`${origin}${path}`))
-    if (path.startsWith("/api/approaches")) return getApproaches()
-    if (path.startsWith("/api/incidents")) return getIncidents()
-    return getWarnings(new Request(`${origin}${path}`))
-  }
-}
-
-async function gatherFacts(load: (path: string) => Promise<Response>): Promise<BriefingInput> {
-  const read = async <T,>(pending: Promise<Response>): Promise<T | null> => {
-    try {
-      const response = await pending
-      return response.ok ? ((await response.json()) as T) : null
-    } catch {
-      return null
-    }
-  }
-  const [traffic, approaches, incidents, warnings] = await Promise.all([
-    read<TrafficResponse>(load("/api/traffic")),
-    read<ApproachesResponse>(load("/api/approaches")),
-    read<IncidentsResponse>(load("/api/incidents")),
-    read<WarningsResponse>(load("/api/warnings?lang=en")),
-  ])
-  return {
-    at: new Date(),
-    traffic: traffic?.ok ? traffic : null,
-    crossings: fastestCrossings(approaches?.ok ? approaches.points : []),
-    incidents: (incidents?.ok ? incidents.incidents.features : []).map((feature) => {
-      const p = (feature.properties ?? {}) as Record<string, string | undefined>
-      return { tc: p.nameTc ?? "", en: p.name ?? "", whereTc: p.location ?? "", whereEn: p.locationEn ?? "" }
-    }),
-    warnings: (warnings?.warnings ?? []).map((row) => ({ name: row.name })),
-    conditions: warnings?.conditions ?? null,
-  }
-}
-
-async function workerEnv(): Promise<Env> {
-  try {
-    return (await import(/* turbopackIgnore: true */ /* webpackIgnore: true */ "cloudflare:workers")).env as Env
-  } catch {
-    return {} // Not running in workerd.
-  }
-}
-
-// Cloudflare secrets in the Worker; .env under the Node dev server.
-function providerKeys(env: Env): BriefingKeys {
-  const pick = (name: string) => {
-    const value = env[name] ?? process.env[name]
-    return typeof value === "string" && value.length > 0 ? value : undefined
-  }
-  return { deepseek: pick("DEEPSEEK_API_KEY"), anthropic: pick("ANTHROPIC_API_KEY") }
 }
 
 function shareKey(window: number): Request {
