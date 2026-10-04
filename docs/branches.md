@@ -6,7 +6,3 @@ A side branch is allowed only while it has a row in the table. Add the row when 
 
 | Branch | What it is |
 | --- | --- |
-| upstream/lint-ignore-build | Head of keithligh/hk-traffic-intelligence#3 (keep build output out of ESLint). Delete when that PR closes. |
-| upstream/sun-sky | Head of keithligh/hk-traffic-intelligence#5 (sky follows the sun). Delete when that PR closes. |
-| upstream/ai-briefing | Head of keithligh/hk-traffic-intelligence#6 (AI city briefing). Delete when that PR closes. |
-| upstream/ask-ai | Head of keithligh/hk-traffic-intelligence#7 (answer traffic questions, checked by Jev). Delete when that PR closes. |
