@@ -53,7 +53,7 @@
 | 狀態 | 項目 | 內容 | 工作量 | PR |
 | --- | --- | --- | --- | --- |
 | ✅ | AI 城市簡報 | 右上角卡片，一至三句講全城交通（繁／簡／英）。DeepSeek 主力、Claude Haiku 4.5 後備；每 15 分鐘一次、全體訪客共用。經 `SELF` binding 讀數據以避開免費計劃子請求上限 | 中 | [#13](https://github.com/johnson-greate/hk-traffic-intelligence/pull/13)、[#14](https://github.com/johnson-greate/hk-traffic-intelligence/pull/14)、[#15](https://github.com/johnson-greate/hk-traffic-intelligence/pull/15)、[#16](https://github.com/johnson-greate/hk-traffic-intelligence/pull/16) |
-| ⬜ | 自然語言問答 | 例如「我 7 點去機場，邊條路好？」 | 大 | |
+| ✅ | 自然語言問答 | AI 簡報卡內的「問 AI」：只用即時數據回答，附引用的事實；程式核對引文、Jev（TypeSafe）核對有沒有額外說法；拒答無關或數據沒有的問題 | 大 | [#20](https://github.com/johnson-greate/hk-traffic-intelligence/pull/20) |
 
 ## 部署
 
