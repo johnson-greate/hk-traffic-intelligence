@@ -54,6 +54,16 @@ assert.ok(facts.some((line) => line.startsWith("Boundary control point") && line
 assert.ok(facts.includes("Weather warnings now in effect: none"))
 assert.ok(askFacts({ ...input, incidents: [] }).includes("Open traffic incidents: none"))
 
+// Fixed reference: which side of the harbour each published start is on and the districts it
+// serves, so the model need not guess Hong Kong geography (it put Tseung Kwan O on the Island side).
+// One line per district, so a quote never has to cut a list.
+assert.ok(facts.includes("Reference, fixed: 中環 Central is on Hong Kong Island; nearest start 告士打道東行近稅務大樓"))
+assert.ok(facts.includes("Reference, fixed: 灣仔 Wan Chai is on Hong Kong Island; nearest start 告士打道東行近稅務大樓"))
+assert.ok(!facts.some((line) => line.includes("nearest start 啓祥道西行")), "no reference for a start with no published time")
+assert.ok(askFacts({ ...input, starts: [...input.starts, { id: "K08", name: "Kai Cheung Road westbound near Kowloon Bay Divisional Fire Station", nameTc: "啓祥道西行近九龍灣消防總局", coordinates: [0, 0], legs: [leg("EH", 9)] }] }).includes(
+  "Reference, fixed: 將軍澳 Tseung Kwan O is on the Kowloon side; nearest start 啓祥道西行近九龍灣消防總局",
+))
+
 // Missing feeds are stated, so the model says it does not know instead of guessing.
 const empty = askFacts({ ...input, traffic: null, starts: [], halls: null })
 assert.match(empty, /Road network: no reading/)
