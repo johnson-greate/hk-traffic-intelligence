@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { briefingFacts, fastestCrossings, jammedRoads } from "./briefing-facts.ts"
+import { briefingFacts, jammedRoads } from "./briefing-facts.ts"
 import type { Corridor } from "./types.ts"
 
 const corridor = (id: string, roadTc: string, roadEn: string, band: Corridor["band"], speedKmh: number | null, lengthKm: number): Corridor => ({
@@ -41,10 +41,6 @@ const facts = briefingFacts({
     corridors,
     summary: { corridorCount: 6, detectorCount: 0, meanSpeedKmh: 62.44, free: 3200, slow: 800, congested: 200, unknown: 10 },
   },
-  crossings: [
-    { code: "CH", minutes: 6 },
-    { code: "EH", minutes: 5 },
-  ],
   incidents: [{ tc: "交通意外", en: "Traffic accident", whereTc: "青雲路", whereEn: "Tsing Wan Road" }],
   warnings: [{ name: "Amber Rainstorm Warning Signal" }],
   conditions: { temperatureC: 28, rainfallMm: 0, rainfallPlace: "" },
@@ -55,7 +51,6 @@ assert.equal(
   [
     "Time: 2026-10-03 14:20 Hong Kong time",
     "Road network: mean 62 km/h; segments free 3200, slow 800, congested 200",
-    "Harbour crossings, fastest published time from any start: Cross-Harbour Tunnel (紅隧) 6 min, Eastern Harbour Crossing (東隧) 5 min",
     "Congested roads, longest first: 窩打老道 Waterloo Road 3.9 km, slowest 7 km/h; 告士打道 Gloucester Road 2.3 km, slowest 4 km/h; 皇后大道東 Queen's Road East 0.6 km, slowest 7 km/h",
     "Open traffic incidents: 交通意外 Traffic accident at 青雲路 Tsing Wan Road",
     "Weather warnings now in effect: Amber Rainstorm Warning Signal",
@@ -64,23 +59,15 @@ assert.equal(
 )
 
 // Missing readings are said plainly; absent incidents and warnings are left out entirely.
-const quiet = briefingFacts({ at: new Date(Date.UTC(2026, 9, 3, 6, 20)), traffic: null, crossings: [], incidents: [], warnings: [], conditions: null })
+const quiet = briefingFacts({ at: new Date(Date.UTC(2026, 9, 3, 6, 20)), traffic: null, incidents: [], warnings: [], conditions: null })
 assert.match(quiet, /Road network: no reading/)
-assert.match(quiet, /Harbour crossings: no reading/)
+// Tunnel times are left to the top bar, which shows them from one roadside sign; a second
+// figure for the same tunnel in the briefing confused which one to trust.
+assert.doesNotMatch(facts, /Harbour|Tunnel|隧/)
+assert.doesNotMatch(quiet, /Harbour/)
 assert.match(quiet, /Congested roads: none/)
 assert.doesNotMatch(quiet, /incident/i)
 assert.doesNotMatch(quiet, /warning/i)
 assert.doesNotMatch(quiet, /Weather: /)
-
-// The fastest time each tunnel has from any published start, tunnels in a fixed order.
-const leg = (code: string, minutes: number | null) => ({ code, name: code, minutes, colour: "green" as const })
-const start = (id: string, legs: ReturnType<typeof leg>[]) => ({ id, name: id, nameTc: id, coordinates: [0, 0] as [number, number], legs })
-assert.deepEqual(
-  fastestCrossings([start("H1", [leg("EH", 9), leg("CH", 7)]), start("H11", [leg("CH", 25), leg("EH", 5), leg("TKO", 1)]), start("K08", [leg("WH", null)])]),
-  [
-    { code: "CH", minutes: 7 },
-    { code: "EH", minutes: 5 },
-  ],
-)
 
 console.log("briefing facts ok")
