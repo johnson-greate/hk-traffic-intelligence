@@ -1,17 +1,23 @@
-import { aiKeys, askInput, feedLoader, readCityFeeds, workerEnv } from "@/app/api/_city/feeds"
-import { askFacts } from "@/lib/ask-facts"
+import { aiKeys, askInput, barStart, feedLoader, readCityFeeds, readFeed, workerEnv } from "@/app/api/_city/feeds"
+import { askFacts, otherSign } from "@/lib/ask-facts"
 import { jevGuard, questionKey, RateLimit } from "@/lib/ask-guard"
+import { allowQuestion, visitorKey } from "@/lib/ask-limit"
+import type { HistoryDb } from "@/lib/history-store"
+import type { ApproachesResponse } from "@/lib/types"
 import { answerQuestion, type AskResult } from "@/lib/ask-llm"
 import { localeOf } from "@/lib/i18n"
 
 export const dynamic = "force-dynamic"
 
 const MAX_QUESTION = 200
-const limit = new RateLimit(5, 10 * 60_000)
+const MAX_PER_WINDOW = 5
+const WINDOW_MS = 10 * 60_000
+// Used only without D1 (the Node dev server); in the Worker the count is shared in D1.
+const localLimit = new RateLimit(MAX_PER_WINDOW, WINDOW_MS)
 const answered = new Map<string, AskBody>()
 
 type AskBody =
-  | ({ ok: true; at: string } & Omit<AskResult, "model">)
+  | ({ ok: true; at: string; barSign: { tc: string; en: string } | null } & Omit<AskResult, "model">)
   | { ok: false; code: "empty" | "too-long" | "rate" | "no-key" | "unreliable" | "failed"; error: string }
 
 // Whether the question box should be shown at all.
@@ -24,7 +30,7 @@ export async function POST(request: Request) {
   const env = await workerEnv()
   const keys = aiKeys(env)
   if (!keys.deepseek && !keys.anthropic) return json({ ok: false, code: "no-key", error: "No AI provider key is set" })
-  let payload: { question?: unknown; locale?: unknown }
+  let payload: { question?: unknown; locale?: unknown; centre?: { lng?: unknown; lat?: unknown } }
   try {
     payload = (await request.json()) as typeof payload
   } catch {
@@ -35,16 +41,23 @@ export async function POST(request: Request) {
   if (!question) return json({ ok: false, code: "empty", error: "Ask a question" }, 400)
   if (question.length > MAX_QUESTION) return json({ ok: false, code: "too-long", error: `At most ${MAX_QUESTION} characters` }, 400)
 
-  const key = questionKey(question, locale)
+  const centre = readCentre(payload.centre)
+  const load = feedLoader(env, new URL(request.url).origin)
+  // Only the crossing feed before the cache and rate checks: it names the top bar's sign,
+  // which is part of the cache key. The rest is read once the question will be answered.
+  const sign = barStart(await readFeed<ApproachesResponse>(load, "/api/approaches"), centre)
+  const key = questionKey(question, locale, Date.now(), sign ?? "")
   const kept = answered.get(key) ?? (await readShared(key))
   if (kept) return json(kept)
 
-  const visitor = request.headers.get("CF-Connecting-IP") ?? "local"
-  if (!limit.allow(visitor)) return json({ ok: false, code: "rate", error: "Too many questions; try again in a few minutes" }, 429)
+  const ip = request.headers.get("CF-Connecting-IP") ?? "local"
+  const db = env.DB as HistoryDb | undefined
+  const allowed = db ? await allowQuestion(db, await visitorKey(ip, Date.now()), Date.now(), MAX_PER_WINDOW, WINDOW_MS).catch(() => localLimit.allow(ip)) : localLimit.allow(ip)
+  if (!allowed) return json({ ok: false, code: "rate", error: "Too many questions; try again in a few minutes" }, 429)
 
   try {
-    const feeds = await readCityFeeds(feedLoader(env, new URL(request.url).origin), true)
-    const facts = askFacts(askInput(feeds))
+    const input = askInput(await readCityFeeds(load, true), centre)
+    const facts = askFacts(input)
     // Jev checks answers with a TypeSafe key, or an OpenRouter key as AGENTS.md describes.
     const guard = keys.typesafe ? jevGuard(keys.typesafe) : keys.openrouter ? jevGuard(keys.openrouter, fetch, "openrouter") : null
     const result = await answerQuestion(question, facts, locale, keys, undefined, guard)
@@ -58,6 +71,7 @@ export async function POST(request: Request) {
       checked: result.checked,
       caution: result.caution,
       jev: result.jev,
+      barSign: result.answerable ? otherSign(result.answer, input.starts, input.barStartId) : null,
     }
     if (answered.size > 500) answered.clear()
     answered.set(key, body)
@@ -70,6 +84,13 @@ export async function POST(request: Request) {
     const unreliable = reason.split("; ").every((part) => part.includes("Jev found an unsupported claim"))
     return json({ ok: false, code: unreliable ? "unreliable" : "failed", error: reason }, unreliable ? 200 : 502)
   }
+}
+
+function readCentre(value: { lng?: unknown; lat?: unknown } | undefined): { lng: number; lat: number } | null {
+  const lng = Number(value?.lng)
+  const lat = Number(value?.lat)
+  // Inside the map's own bounds; anything else is ignored rather than trusted.
+  return lng > 113.6 && lng < 114.7 && lat > 21.9 && lat < 22.8 ? { lng, lat } : null
 }
 
 function shareKey(key: string): Request {
