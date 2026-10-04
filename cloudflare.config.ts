@@ -14,6 +14,7 @@ export default defineConfig({
       // Declared so each deploy keeps the values set with `wrangler secret put`.
       DEEPSEEK_API_KEY: bindings.secret(),
       ANTHROPIC_API_KEY: bindings.secret(),
+      TYPESAFE_API_KEY: bindings.secret(),
       // The Worker itself, so the AI briefing can read each feed as a separate request
       // with its own subrequest and CPU limits.
       SELF: bindings.worker({ worker: "hktraffic" }),
