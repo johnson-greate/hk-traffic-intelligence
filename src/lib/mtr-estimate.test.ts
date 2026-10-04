@@ -86,8 +86,29 @@ assert.equal(atPlatform.from, "B")
 assert.equal(atPlatform.to, "B")
 assert.equal(atPlatform.clamp, "none")
 
-const coarse = estimateTrains(line, [obs("B", "C", 1, 1), obs("C", "C", 5, 5)], locate)
+const coarse = estimateTrains(line, [obs("B", "C", 1, 1), obs("C", "C", 4, 4)], locate)
 assert.equal(coarse.length, 1)
+
+const urban: EstimateRoute[] = [
+  { id: "TWL-DT", line: "TWL", stations: ["P", "Q", "R", "S"] },
+  { id: "TWL-UT", line: "TWL", stations: ["S", "R", "Q", "P"] },
+]
+place("P", 0)
+place("Q", 720)
+place("R", 1440)
+place("S", 2160)
+const sameTrain = estimateTrains(
+  urban,
+  [obs("Q", "S", 1, 1, "TWL"), obs("R", "S", 2, 2, "TWL")],
+  locate,
+)
+assert.equal(sameTrain.length, 1)
+const following = estimateTrains(
+  urban,
+  [obs("Q", "S", 1, 1, "TWL"), obs("R", "S", 0, 0, "TWL")],
+  locate,
+)
+assert.equal(following.length, 2)
 
 const differentTrains = estimateTrains(line, [obs("B", "C", 1, 1), obs("C", "C", 8, 8)], locate)
 assert.equal(differentTrains.length, 2)

@@ -1,3 +1,5 @@
+import { openFeedCache } from "@/lib/feed-cache"
+
 type UpstreamBody = { status: number; body: ArrayBuffer; contentType: string }
 
 type UpstreamOptions = {
@@ -22,27 +24,12 @@ async function readThrough(url: string, ttlMs: number, options: UpstreamOptions)
   const shared = await readShared(url, ttlMs)
   if (shared) return shared
 
-  const seconds = Math.max(1, Math.round(ttlMs / 1000))
-  let response: Response
-  try {
-    // vinext's fetch adds cache: no-store inside force-dynamic routes, and
-    // Cloudflare rejects cacheTtl together with no-store. The saved fetch is
-    // the one that can keep the response.
-    response = await rawFetch()(url, {
-      signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
-      headers: options.headers,
-      cf: {
-        cacheEverything: true,
-        cacheTtl: seconds,
-        cacheTtlByStatus: { "200-299": seconds, "300-599": 0 },
-      },
-    } as RequestInit)
-  } catch {
-    response = await rawFetch()(url, {
-      signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
-      headers: options.headers,
-    })
-  }
+  // One cache only. fetch() with cacheTtl and cache.put of the same URL wait on
+  // each other, and the request never produces a response.
+  const response = await rawFetch()(url, {
+    signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
+    headers: options.headers,
+  })
 
   const contentType = response.headers.get("content-type") ?? ""
   const bytes = await response.arrayBuffer()
@@ -55,7 +42,7 @@ async function readThrough(url: string, ttlMs: number, options: UpstreamOptions)
 }
 
 async function readShared(url: string, ttlMs: number): Promise<UpstreamBody | null> {
-  const cache = await openCache()
+  const cache = await openFeedCache()
   if (!cache) return null
   try {
     const cached = await cache.match(new Request(url))
@@ -67,7 +54,7 @@ async function readShared(url: string, ttlMs: number): Promise<UpstreamBody | nu
 }
 
 async function writeShared(url: string, ttlMs: number, body: UpstreamBody): Promise<void> {
-  const cache = await openCache()
+  const cache = await openFeedCache()
   if (!cache) return
   const seconds = Math.max(1, Math.round(ttlMs / 1000))
   try {
@@ -94,17 +81,6 @@ async function remember(url: string, ttlMs: number, response: Response): Promise
   }
   memory.set(url, { expires: Date.now() + ttlMs, body })
   return body
-}
-
-async function openCache(): Promise<Cache | null> {
-  const storage = globalThis.caches as (CacheStorage & { default?: Cache }) | undefined
-  if (!storage) return null
-  if (storage.default) return storage.default
-  try {
-    return await storage.open("hktraffic-feeds")
-  } catch {
-    return null
-  }
 }
 
 function rawFetch(): typeof fetch {

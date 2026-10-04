@@ -1,6 +1,7 @@
+import { openFeedCache } from "@/lib/feed-cache"
 import { carryArrivalClock, estimateTrains, type TrainObservation } from "@/lib/mtr-estimate"
 import { pool } from "@/lib/pool"
-import { oldestDue } from "@/lib/refresh-slice"
+import { fairLineReads } from "@/lib/refresh-slice"
 import { fetchUpstream } from "@/lib/upstream"
 import { mtrQueries, networkRoutes, stationPoint } from "@/lib/mtr-network"
 import { readSchedule } from "@/lib/mtr-schedule"
@@ -14,17 +15,23 @@ const FETCH_LIMIT = 4
 type Remembered = { at: number; board: MtrBoard; observations: TrainObservation[] }
 
 const remembered = new Map<string, Remembered>()
+// Not this worker's host. A cache key on our own host can wait on the request that is writing it.
+const MEMORY_URL = "https://hktraffic-cache.invalid/mtr-board-memory"
 let blockedUntil = 0
 let failures = 0
 
+type SavedMemory = { stations: { key: string; at: number; board: MtrBoard; observations: TrainObservation[] }[] }
+
 // Station positions stay in the network file. These calls are only the next-train
-// clock. One snapshot is about 120 station calls. The published feed has no
-// network dump, and it answers 429 if those calls arrive together. Each refresh
-// reads only the oldest stale stations, so the clock turns over without a burst.
+// clock. The published feed answers 429 if all 120 station calls arrive together,
+// so each refresh reads 16. The shared book is which stations we already know.
+// The next 16 are chosen so every line, including Tsuen Wan, is read before a
+// line that was just read gets another turn.
 export async function loadMtrSnapshot(now = Date.now()): Promise<MtrResponse> {
   if (now >= blockedUntil) failures = 0
+  await readSharedMemory(now)
   if (now >= blockedUntil) {
-    const due = oldestDue(
+    const due = fairLineReads(
       mtrQueries(),
       (pair) => remembered.get(`${pair.line}-${pair.station}`)?.at ?? null,
       now,
@@ -47,6 +54,7 @@ export async function loadMtrSnapshot(now = Date.now()): Promise<MtrResponse> {
         observations: carryArrivalClock(previous?.observations ?? [], parsed.observations),
       })
     })
+    await writeSharedMemory(now)
   }
 
   const boards: MtrBoard[] = []
@@ -76,6 +84,43 @@ export async function loadMtrSnapshot(now = Date.now()): Promise<MtrResponse> {
     hold: train.hold,
   }))
   return { ok: true, observedAt: new Date(now).toISOString(), trains, boards }
+}
+
+async function readSharedMemory(now: number): Promise<void> {
+  const cache = await openFeedCache()
+  if (!cache) return
+  try {
+    const hit = await cache.match(new Request(MEMORY_URL))
+    if (!hit?.ok) return
+    const saved = await hit.json() as SavedMemory
+    for (const item of saved.stations ?? []) {
+      if (now - item.at > REMEMBER_MS) continue
+      const current = remembered.get(item.key)
+      if (!current || item.at > current.at) remembered.set(item.key, { at: item.at, board: item.board, observations: item.observations })
+    }
+  } catch {
+    // A broken cache entry leaves this worker with the stations it already holds.
+  }
+}
+
+async function writeSharedMemory(now: number): Promise<void> {
+  const cache = await openFeedCache()
+  if (!cache) return
+  const stations: SavedMemory["stations"] = []
+  for (const [key, item] of remembered) {
+    if (now - item.at > REMEMBER_MS) continue
+    stations.push({ key, at: item.at, board: item.board, observations: item.observations })
+  }
+  try {
+    await cache.put(
+      new Request(MEMORY_URL),
+      new Response(JSON.stringify({ stations } satisfies SavedMemory), {
+        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=180" },
+      }),
+    )
+  } catch {
+    // The next request still has this worker's own copy.
+  }
 }
 
 async function fetchPair(line: string, station: string) {

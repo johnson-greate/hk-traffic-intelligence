@@ -13,8 +13,8 @@ body:
       description: 一步一步寫，讓別人可以照做一次。
       placeholder: |
         1. 打開 http://localhost:4317
-        2. 按頂部的「紅隧」
-        3. 起點選「東區走廊西行近鯉景灣」
+        2. 按頂部的「起點」
+        3. 選「東區走廊西行近鯉景灣」
     validations:
       required: true
   - type: textarea

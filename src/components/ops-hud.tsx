@@ -1,15 +1,15 @@
 "use client"
 
-import { useEffect, useState, type KeyboardEvent } from "react"
-import { flushSync } from "react-dom"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { createPortal, flushSync } from "react-dom"
 import { useI18n } from "@/components/locale"
 import { boundaryGlance } from "@/lib/control-points"
-import { bestCrossings } from "@/lib/crossings"
-import { harbourChoice, pickOrigin, type HarbourCode } from "@/lib/harbour-choice"
+import { crossingsFrom, nearestApproach } from "@/lib/crossings"
 import { displayText, formatClock, LOCALE_MARK, LOCALES, type Messages } from "@/lib/i18n"
+import { CHANGELOG, changelogText } from "@/lib/changelog"
 import { INTEL_TABS, intelBoard, type IntelItem, type IntelTab } from "@/lib/intel"
 import { formatSpeed } from "@/lib/speed"
-import type { ApproachesResponse, ApproachPoint, HarbourJourney, TrafficResponse, WeatherConditions, WeatherWarning } from "@/lib/types"
+import type { ApproachPoint, ApproachesResponse, HarbourJourney, TrafficResponse, WeatherConditions, WeatherWarning } from "@/lib/types"
 import { weatherBar } from "@/lib/warnings"
 
 type OpsHudProps = {
@@ -28,9 +28,18 @@ type OpsHudProps = {
   warningsError: string | null
   conditions: WeatherConditions | null
   mapLive: boolean
+  pictureError: string | null
+  mtrError: string | null
+  kmbError: string | null
+  lrtError: string | null
+  citybusError: string | null
+  gmbError: string | null
+  nlbError: string | null
+  ferryError: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onFocus: (focus: { id: string; coordinates: [number, number] }) => void
+  view: { lng: number; lat: number; zoom: number } | null
 }
 
 const TONE: Record<HarbourJourney["colour"], string> = {
@@ -51,9 +60,15 @@ export function OpsHud(props: OpsHudProps) {
   const clock = useHongKongClock(locale)
   const [tab, setTab] = useState<IntelTab>("ranked")
   const [barOpen, setBarOpen] = useState(true)
-  const [harbourOpen, setHarbourOpen] = useState(false)
+  const [pinnedOrigin, setPinnedOrigin] = useState<string | null>(null)
   const open = props.open
-  const crossings = bestCrossings(props.approaches?.ok ? props.approaches.points : [])
+  const approachPoints = props.approaches?.ok ? props.approaches.points : []
+  const nearest = nearestApproach(approachPoints, props.view)
+  const pinned = pinnedOrigin ? approachPoints.find((point) => point.id === pinnedOrigin) ?? null : null
+  const origin = pinned ?? nearest
+  const crossings = crossingsFrom(origin)
+  const islandPoints = approachPoints.filter((point) => point.id.startsWith("H"))
+  const kowloonPoints = approachPoints.filter((point) => point.id.startsWith("K"))
   const summary = props.traffic?.ok ? props.traffic.summary : null
   const totalBands = summary ? summary.free + summary.slow + summary.congested : 0
   const live = Boolean(summary) && !props.trafficError
@@ -71,6 +86,15 @@ export function OpsHud(props: OpsHudProps) {
     warningsReady: props.warningsReady,
     warningsError: props.warningsError,
     conditions: props.conditions,
+    pictureError: props.pictureError,
+    mtrError: props.mtrError,
+    kmbError: props.kmbError,
+    lrtError: props.lrtError,
+    citybusError: props.citybusError,
+    gmbError: props.gmbError,
+    nlbError: props.nlbError,
+    ferryError: props.ferryError,
+    mapError: props.mapLive ? null : m.mapFailed,
   }, m)
   const intel = board[tab]
   const urgentCount = intel.filter((item) => item.urgent).length
@@ -104,31 +128,91 @@ export function OpsHud(props: OpsHudProps) {
   useEffect(() => {
     const root = document.documentElement
     const apply = () => {
-      if (window.matchMedia("(min-width: 1024px)").matches) {
-        root.style.removeProperty("--map-control-top")
-        return
+      const narrow = window.matchMedia("(max-width: 639px)").matches
+      const attrib = document.querySelector<HTMLElement>(".maplibregl-ctrl-attrib")
+      const attribBox = attrib?.getBoundingClientRect()
+      if (narrow && !open && attribBox && attribBox.height > 2) {
+        const clearance = Math.ceil(window.innerHeight - attribBox.top + 8)
+        root.style.setProperty("--marquee-bottom", `${clearance}px`)
+        root.style.setProperty("--dock-closed-bottom", `${clearance + 48}px`)
+      } else {
+        root.style.removeProperty("--marquee-bottom")
+        root.style.removeProperty("--dock-closed-bottom")
       }
+      const scroll = document.querySelector<HTMLElement>(".bar-scroll")
+      if (scroll) scroll.classList.toggle("bar-scroll-more", scroll.scrollWidth > scroll.clientWidth + 2)
       const header = document.querySelector<HTMLElement>("[data-map-chrome='top']")
-      const box = header?.getBoundingClientRect()
-      if (!box || box.height < 2 || box.left > 56) {
+      const panel = document.querySelector<HTMLElement>("[data-map-chrome='panel']")
+      const list = document.getElementById("harbour-intel-list")
+      const headerBox = header?.getBoundingClientRect()
+      const headerVisible = !!headerBox && headerBox.height > 2 && headerBox.left <= 56
+      if (open && list && panel && headerVisible && headerBox) {
+        const dock = document.querySelector<HTMLElement>("[data-layer-dock]")
+        const zoom = document.querySelector<HTMLElement>(".maplibregl-ctrl-top-left")
+        const dockBox = dock?.getBoundingClientRect()
+        const zoomBox = zoom?.getBoundingClientRect()
+        const dockH = dockBox && dockBox.height > 2 ? dockBox.height : 0
+        const zoomH = zoomBox && zoomBox.height > 2 ? zoomBox.height : 0
+        const aboveList = Math.max(0, list.getBoundingClientRect().top - panel.getBoundingClientRect().top)
+        let bottomGap = narrow ? 96 : window.innerWidth >= 1024 ? 56 : 144
+        if (narrow && attribBox && attribBox.height > 2) {
+          bottomGap = Math.max(bottomGap, Math.ceil(window.innerHeight - attribBox.top + 14))
+        }
+        if (narrow) root.style.setProperty("--intel-bottom", `${bottomGap}px`)
+        else root.style.removeProperty("--intel-bottom")
+        const minTop = Math.ceil(headerBox.bottom + (narrow ? zoomH + dockH + 28 : 8))
+        const available = window.innerHeight - bottomGap - minTop - aboveList
+        root.style.setProperty("--intel-list-max", `${Math.max(72, Math.floor(available))}px`)
+      } else {
+        root.style.removeProperty("--intel-list-max")
+        root.style.removeProperty("--intel-bottom")
+      }
+      const panelBox = panel?.getBoundingClientRect()
+      if (narrow && open && panelBox && panelBox.height > 80 && panelBox.top > 80) {
+        root.style.setProperty("--map-dock-bottom", `${Math.ceil(window.innerHeight - panelBox.top + 8)}px`)
+      } else {
+        root.style.removeProperty("--map-dock-bottom")
+      }
+      if (!headerVisible || !headerBox || window.matchMedia("(min-width: 1024px)").matches) {
         root.style.removeProperty("--map-control-top")
         return
       }
-      root.style.setProperty("--map-control-top", `${Math.ceil(box.bottom + 6)}px`)
+      root.style.setProperty("--map-control-top", `${Math.ceil(headerBox.bottom + 6)}px`)
     }
     apply()
     const header = document.querySelector("[data-map-chrome='top']")
+    const panel = document.querySelector("[data-map-chrome='panel']")
+    const dock = document.querySelector("[data-layer-dock]")
     const observer = new ResizeObserver(apply)
+    const watchCorner = () => {
+      const corner = document.querySelector(".maplibregl-ctrl-bottom-right")
+      if (corner) observer.observe(corner)
+    }
     if (header) observer.observe(header)
+    if (panel) observer.observe(panel)
+    if (dock) observer.observe(dock)
+    watchCorner()
+    const map = document.querySelector(".maplibregl-map")
+    const mutations = new MutationObserver(() => {
+      watchCorner()
+      apply()
+    })
+    if (map) mutations.observe(map, { childList: true, subtree: true })
     window.addEventListener("resize", apply)
     return () => {
       observer.disconnect()
+      mutations.disconnect()
       window.removeEventListener("resize", apply)
       root.style.removeProperty("--map-control-top")
+      root.style.removeProperty("--map-dock-bottom")
+      root.style.removeProperty("--intel-list-max")
+      root.style.removeProperty("--intel-bottom")
+      root.style.removeProperty("--marquee-bottom")
+      root.style.removeProperty("--dock-closed-bottom")
     }
-  }, [barOpen, locale])
+  }, [barOpen, locale, open, props.mapLive])
   return (
-    <div className="pointer-events-none absolute inset-0 z-[5]">
+    <div className="@container/hud pointer-events-none absolute inset-0 z-[5]">
       {barOpen ? null : (
         <button
           type="button"
@@ -141,16 +225,16 @@ export function OpsHud(props: OpsHudProps) {
       )}
       <header
         data-map-chrome="top"
-        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-col gap-1 overflow-x-clip border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:gap-1.5 sm:px-2 sm:py-1.5 sm:flex-row sm:items-center lg:right-4 lg:left-16 ${
+        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-row items-center gap-1 border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:flex-col sm:items-stretch sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[64rem]/hud:flex-row @min-[64rem]/hud:items-center lg:right-4 lg:left-16 ${
           barOpen ? "" : "max-sm:hidden"
-        } ${harbourOpen ? "z-[7]" : ""}`}
+        }`}
       >
-        <div className="flex shrink-0 items-center gap-2 pr-1 sm:gap-3">
-          <div>
+        <div className="flex shrink-0 items-center gap-1 sm:min-w-0 sm:flex-wrap sm:gap-3">
+          <div className="min-w-0 max-w-14 sm:max-w-none">
             <p className="hidden font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.18em] text-cyan-200/80 uppercase sm:block">{m.productMark}</p>
-            <p className="font-[family-name:var(--font-hud)] text-sm whitespace-nowrap text-white">{m.productName}</p>
+            <p className="truncate font-[family-name:var(--font-hud)] text-sm leading-tight text-white">{m.productName}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 sm:block">
+          <div className="shrink-0">
             <p className="font-[family-name:var(--font-hud)] text-sm text-cyan-50 tabular-nums">{clock}</p>
             <p className="flex items-center gap-1.5 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.14em] text-cyan-100 uppercase">
               <span className={`size-1.5 rounded-full ${live ? "hud-pulse bg-[#3DDC97]" : "bg-[#FFC857]"}`} />
@@ -158,7 +242,7 @@ export function OpsHud(props: OpsHudProps) {
               {props.mapLive ? "" : ` · ${m.mapOff}`}
             </p>
           </div>
-          <div className="inline-flex shrink-0 border border-white/15" role="group" aria-label={m.language}>
+          <div className="hidden shrink-0 border border-white/15 sm:inline-flex" role="group" aria-label={m.language}>
             {LOCALES.map((item) => (
               <button
                 key={item}
@@ -175,25 +259,57 @@ export function OpsHud(props: OpsHudProps) {
           </div>
           <button
             type="button"
-            aria-expanded={barOpen}
-            onClick={() => setBarOpen(false)}
-            className="ml-auto shrink-0 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
+            aria-expanded={open && tab === "notes"}
+            onClick={() => show("notes", undefined)}
+            className="hidden shrink-0 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 sm:inline-flex"
           >
-            {m.hide}
+            {m.changelog}
           </button>
         </div>
-        <div className="@container/bar flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-clip sm:gap-1.5">
-          {crossings.map((crossing) => (
-            <Metric
-              key={crossing.code}
-              label={BAR_KEY[crossing.code] ? m[BAR_KEY[crossing.code]] : crossing.label}
-              value={m.minutes(crossing.minutes)}
-              tone={TONE[crossing.colour]}
-              hint={m.approachHint(displayText(m.locale, crossing.fromTc, crossing.from))}
-              expanded={harbourOpen}
-              onClick={() => setHarbourOpen((value) => !value)}
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          {origin ? (
+            <OriginMenu
+              pinnedId={pinned?.id ?? null}
+              nearest={nearest}
+              island={islandPoints}
+              kowloon={kowloonPoints}
+              onChoose={(id) => {
+                setPinnedOrigin(id)
+                const point = id ? approachPoints.find((item) => item.id === id) : nearest
+                if (point) props.onFocus({ id: `harbour-origin-${point.id}`, coordinates: point.coordinates })
+              }}
             />
-          ))}
+          ) : null}
+          <div className="bar-scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1.5">
+          {origin ? (["CH", "EH", "WH"] as const).map((code) => {
+            const crossing = crossings.find((item) => item.code === code)
+            if (!crossing) {
+              return (
+                <Metric
+                  key={code}
+                  label={m[BAR_KEY[code]]}
+                  value={m.harbourMissing}
+                  tone={TONE.none}
+                  hint={m.harbourMissingHint}
+                  onClick={() => {
+                    if (origin) props.onFocus({ id: `harbour-origin-${origin.id}`, coordinates: origin.coordinates })
+                  }}
+                />
+              )
+            }
+            const road = displayText(m.locale, crossing.fromTc, crossing.from)
+            const compare = crossing.slower > 0 ? m.slowerBy(crossing.slower) : m.fastestHere
+            return (
+              <Metric
+                key={crossing.code}
+                label={m[BAR_KEY[crossing.code]]}
+                value={m.minutes(crossing.minutes)}
+                tone={TONE[crossing.colour]}
+                hint={`${m.approachHint(road)} ${compare}`}
+                onClick={() => props.onFocus({ id: `crossing-${crossing.code}`, coordinates: crossing.coordinates })}
+              />
+            )
+          }) : null}
           {incidentCount > 0 ? (
             <Metric
               label={m.incident}
@@ -208,23 +324,45 @@ export function OpsHud(props: OpsHudProps) {
             value={halls.label}
             tone={TONE[halls.tone]}
             hint={m.boundaryHint}
-            className="hidden @min-[36rem]/bar:block"
             onClick={() => show("boundary", worstHall)}
           />
           {weather ? (
             <Metric
               label={m.weather}
-              value={weather.label}
+              value={/^\d+°C/.test(weather.label) ? (weather.label.split(" · ")[0] ?? weather.label) : weather.label}
               tone={TONE[weather.tone]}
-              hint={m.weatherHint}
-              className="hidden @min-[42rem]/bar:block"
+              hint={weather.label}
               onClick={() => show("weather", undefined)}
             />
           ) : null}
+          <div className="inline-flex shrink-0 border border-white/15 sm:hidden" role="group" aria-label={m.language}>
+            {LOCALES.map((item) => (
+              <button
+                key={`bar-${item}`}
+                type="button"
+                aria-pressed={locale === item}
+                onClick={() => setLocale(item)}
+                className={`px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] ${
+                  locale === item ? "bg-white/10 text-white" : "text-cyan-100/70"
+                }`}
+              >
+                {LOCALE_MARK[item]}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-expanded={open && tab === "notes"}
+            onClick={() => show("notes", undefined)}
+            className="shrink-0 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 sm:hidden"
+          >
+            {m.changelog}
+          </button>
+          </div>
           <button
             type="button"
             onClick={() => show("roads", worstRoad)}
-            className="block shrink-0 border border-white/10 bg-black/30 px-1.5 py-1 text-left sm:ml-auto sm:px-2"
+            className="block shrink-0 border border-white/10 bg-black/30 px-0.5 py-1 text-left sm:px-2"
             title={bandTitle(summary, m)}
           >
             <p className="font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.network}</p>
@@ -241,23 +379,23 @@ export function OpsHud(props: OpsHudProps) {
               ) : null}
             </div>
           </button>
+          <button
+            type="button"
+            aria-expanded={barOpen}
+            onClick={() => setBarOpen(false)}
+            className="shrink-0 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
+          >
+            {m.hide}
+          </button>
         </div>
-        {harbourOpen ? (
-          <HarbourCard
-            points={props.approaches?.ok ? props.approaches.points : []}
-            capturedAt={props.approaches?.ok ? props.approaches.capturedAt : null}
-            onClose={() => setHarbourOpen(false)}
-            onFocus={props.onFocus}
-          />
-        ) : null}
       </header>
       <section
         id="harbour-intel"
         data-map-chrome="panel"
         className={
           open
-            ? "pointer-events-auto absolute right-3 bottom-36 z-[6] w-[min(22rem,calc(100%-1.5rem))] max-sm:bottom-(--layer-dock-clear,9rem) border border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md lg:right-4 lg:bottom-14"
-            : "pointer-events-auto absolute inset-x-0 bottom-14 z-[6] max-sm:bottom-(--layer-dock-clear,9rem) border-t border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md"
+            ? "pointer-events-auto absolute right-3 bottom-[var(--intel-bottom,6rem)] z-[6] w-[min(22rem,calc(100%-1.5rem))] border border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:bottom-36 lg:right-4 lg:bottom-14"
+            : "pointer-events-auto absolute inset-x-0 bottom-[var(--marquee-bottom,3.5rem)] z-[6] border-t border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:bottom-14"
         }
       >
         <div className="flex items-center gap-1 px-1.5 py-1">
@@ -301,9 +439,15 @@ export function OpsHud(props: OpsHudProps) {
           ) : (
             <>
               <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.14em] text-cyan-100/70 uppercase">
-                {tab === "ranked" ? m.ranked : tab === "roads" ? m.roads : tab === "boundary" ? m.boundary : m.weather}
+                {tabLabel(tab, m)}
               </span>
-              <IntelMarquee items={intel} empty={emptyCopy(tab, m)} seconds={marqueeSeconds} onFocus={props.onFocus} />
+              {tab === "notes" ? (
+                <p className="min-w-0 flex-1 truncate text-sm text-zinc-200">
+                  {CHANGELOG[0] ? changelogText(CHANGELOG[0], locale) : m.changelog}
+                </p>
+              ) : (
+                <IntelMarquee items={intel} empty={emptyCopy(tab, m)} seconds={marqueeSeconds} onFocus={props.onFocus} />
+              )}
               {urgentCount > 0 ? (
                 <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-[#FF5D73] uppercase">{urgentCount}</span>
               ) : null}
@@ -324,9 +468,11 @@ export function OpsHud(props: OpsHudProps) {
             id="harbour-intel-list"
             role="tabpanel"
             aria-labelledby={`intel-tab-${tab}`}
-            className="intel-scroll max-h-[min(26rem,46dvh)] overflow-y-auto max-sm:max-h-[min(26rem,calc(100dvh-var(--layer-dock-clear,9rem)-15rem))] border-t border-white/10 px-2 py-2"
+            className="intel-scroll max-h-[min(26rem,46dvh,var(--intel-list-max,100dvh))] overflow-y-auto border-t border-white/10 px-2 py-2"
           >
-            {intel.length === 0 ? (
+            {tab === "notes" ? (
+              <ChangelogList />
+            ) : intel.length === 0 ? (
               <p className="px-1 py-2 text-sm text-zinc-300">{emptyCopy(tab, m)}</p>
             ) : (
               <ol className="flex flex-col gap-1">
@@ -344,14 +490,129 @@ export function OpsHud(props: OpsHudProps) {
   )
 }
 
-function Metric(props: { label: string; value: string; tone: string; hint?: string; className?: string; expanded?: boolean; onClick: () => void }) {
+function OriginMenu(props: {
+  pinnedId: string | null
+  nearest: ApproachPoint | null
+  island: ApproachPoint[]
+  kowloon: ApproachPoint[]
+  onChoose: (id: string | null) => void
+}) {
+  const { locale, messages: m } = useI18n()
+  const [open, setOpen] = useState(false)
+  const [box, setBox] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const place = () => {
+      const rect = rootRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const width = Math.min(352, window.innerWidth - 16)
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+      const top = Math.round(rect.bottom + 4)
+      setBox({ top, left: Math.round(left), width: Math.round(width), maxHeight: Math.max(160, window.innerHeight - top - 8) })
+    }
+    place()
+    window.addEventListener("resize", place)
+    return () => window.removeEventListener("resize", place)
+  }, [open])
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false)
+    }
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("mousedown", close)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", close)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [open])
+  const chosen = props.pinnedId
+    ? [...props.island, ...props.kowloon].find((point) => point.id === props.pinnedId) ?? props.nearest
+    : props.nearest
+  const road = chosen ? displayText(locale, chosen.nameTc, chosen.name) : ""
+  const choose = (id: string | null) => {
+    props.onChoose(id)
+    setOpen(false)
+  }
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={m.harbourFrom}
+        onClick={() => setOpen((current) => !current)}
+        className="block max-w-28 border border-white/10 bg-black/30 px-1 py-1 text-left sm:max-w-56 sm:px-2"
+      >
+        <span className="block font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.harbourFrom}</span>
+        <span className="block truncate font-[family-name:var(--font-hud)] text-sm leading-none text-white sm:text-base">
+          {props.pinnedId ? road : m.followMap(road)}
+        </span>
+      </button>
+      {open && box
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="listbox"
+              aria-label={m.harbourFrom}
+              style={{ top: box.top, left: box.left, width: box.width, maxHeight: box.maxHeight }}
+              className="fixed z-50 overflow-y-auto border border-cyan-200/30 bg-[#041018] p-1 text-sm text-white shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+            >
+              <OriginChoice selected={props.pinnedId == null} onChoose={() => choose(null)}>
+                {m.followMap(props.nearest ? displayText(locale, props.nearest.nameTc, props.nearest.name) : "")}
+              </OriginChoice>
+              <OriginList label={m.fromIsland} points={props.island} pinnedId={props.pinnedId} onChoose={choose} />
+              <OriginList label={m.fromKowloon} points={props.kowloon} pinnedId={props.pinnedId} onChoose={choose} />
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  )
+}
+
+function OriginList(props: { label: string; points: ApproachPoint[]; pinnedId: string | null; onChoose: (id: string) => void }) {
+  const { locale } = useI18n()
+  if (props.points.length === 0) return null
+  return (
+    <div className="mt-1">
+      <p className="px-2 py-1 font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/70 uppercase">{props.label}</p>
+      {props.points.map((point) => (
+        <OriginChoice key={point.id} selected={props.pinnedId === point.id} onChoose={() => props.onChoose(point.id)}>
+          {displayText(locale, point.nameTc, point.name)}
+        </OriginChoice>
+      ))}
+    </div>
+  )
+}
+
+function OriginChoice(props: { selected: boolean; onChoose: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={props.selected}
+      onClick={props.onChoose}
+      className={`block w-full px-2 py-1.5 text-left whitespace-nowrap text-white hover:bg-white/10 ${props.selected ? "bg-white/10" : ""}`}
+    >
+      {props.children}
+    </button>
+  )
+}
+
+function Metric(props: { label: string; value: string; tone: string; hint?: string; className?: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={props.onClick}
-      aria-expanded={props.expanded}
       title={props.hint}
-      className={`block shrink-0 border border-white/10 bg-black/30 px-1.5 py-1 text-left sm:px-2 ${props.className ?? ""}`}
+      className={`block shrink-0 border border-white/10 bg-black/30 px-0.5 py-1 text-left sm:px-2 ${props.className ?? ""}`}
     >
       <p className="font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{props.label}</p>
       <p className="font-[family-name:var(--font-hud)] text-sm leading-none whitespace-nowrap tabular-nums sm:text-base" style={{ color: props.tone }}>
@@ -361,125 +622,35 @@ function Metric(props: { label: string; value: string; tone: string; hint?: stri
   )
 }
 
-const ORIGIN_KEY = "harbour-origin"
-
-const FULL_KEY: Record<HarbourCode, "crossFull" | "easternFull" | "westernFull"> = {
-  CH: "crossFull",
-  EH: "easternFull",
-  WH: "westernFull",
-}
-
-function readOrigin(): string | null {
-  try {
-    return window.localStorage.getItem(ORIGIN_KEY)
-  } catch {
-    return null
-  }
-}
-
-function saveOrigin(id: string) {
-  try {
-    window.localStorage.setItem(ORIGIN_KEY, id)
-  } catch {
-    // Private windows can refuse storage; the card still works for this visit.
-  }
-}
-
-function HarbourCard(props: {
-  points: ApproachPoint[]
-  capturedAt: string | null
-  onClose: () => void
-  onFocus: OpsHudProps["onFocus"]
-}) {
-  const { messages: m } = useI18n()
-  // Read once when the card opens, so the server render never touches storage.
-  const [chosen, setChosen] = useState<string | null>(readOrigin)
-  const origin = pickOrigin(props.points, chosen)
-  const options = origin ? harbourChoice(origin) : []
-  const slowest = Math.max(1, ...options.map((row) => row.minutes))
-  const place = (point: ApproachPoint) => displayText(m.locale, point.nameTc, point.name)
-  const groups = [
-    { label: m.fromIsland, points: props.points.filter((point) => point.id.startsWith("H")) },
-    { label: m.fromKowloon, points: props.points.filter((point) => !point.id.startsWith("H")) },
-  ]
-  const choose = (id: string) => {
-    setChosen(id)
-    saveOrigin(id)
-    const point = props.points.find((item) => item.id === id)
-    if (point) props.onFocus({ id: `harbour-origin-${point.id}`, coordinates: point.coordinates })
+function ChangelogList() {
+  const { locale, messages: m } = useI18n()
+  const kind = {
+    added: m.changelogAdded,
+    fixed: m.changelogFixed,
+    improved: m.changelogImproved,
   }
   return (
-    <section
-      aria-label={m.harbourChoice}
-      className="absolute top-full left-0 mt-1 w-[min(22rem,calc(100vw-1rem))] border border-cyan-200/30 bg-[#041018]/92 p-2 shadow-[0_0_24px_rgba(34,211,238,0.12)] backdrop-blur-md"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.18em] text-cyan-200/80 uppercase">{m.harbourChoice}</p>
-        <button
-          type="button"
-          onClick={props.onClose}
-          className="border border-white/15 px-1.5 py-0.5 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50"
-        >
-          {m.hide}
-        </button>
-      </div>
-      <label className="mt-2 block">
-        <span className="font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.harbourFrom}</span>
-        <select
-          value={origin?.id ?? ""}
-          onChange={(event) => choose(event.target.value)}
-          className="mt-0.5 block w-full border border-white/15 bg-black/40 px-1.5 py-1 text-sm text-white"
-        >
-          {groups.map((group) =>
-            group.points.length > 0 ? (
-              <optgroup key={group.label} label={group.label}>
-                {group.points.map((point) => (
-                  <option key={point.id} value={point.id}>
-                    {place(point)}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null,
-          )}
-        </select>
-      </label>
-      {options.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-300">{m.harbourNone}</p>
-      ) : (
-        <ol className="mt-2 flex flex-col gap-1.5">
-          {options.map((row) => (
-            <li key={row.code}>
-              <button
-                type="button"
-                onClick={() => origin && props.onFocus({ id: `harbour-origin-${origin.id}`, coordinates: origin.coordinates })}
-                className={`block w-full border px-2 py-1.5 text-left hover:bg-white/5 ${row.fastest ? "border-[#3DDC97]/60 bg-[#3DDC97]/10" : "border-white/10 bg-black/30"}`}
-              >
-                <span className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm text-white">{m[FULL_KEY[row.code]]}</span>
-                  <span className="font-[family-name:var(--font-hud)] text-base leading-none tabular-nums" style={{ color: TONE[row.colour] }}>
-                    {m.minutes(row.minutes)}
-                  </span>
-                </span>
-                <span className="mt-1 flex items-center gap-2">
-                  <span className="h-1 flex-1 overflow-hidden bg-white/10">
-                    <span className="block h-full" style={{ width: `${(row.minutes / slowest) * 100}%`, background: TONE[row.colour] }} />
-                  </span>
-                  <span
-                    className={`shrink-0 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.12em] uppercase ${row.fastest ? "text-[#3DDC97]" : "text-zinc-300"}`}
-                  >
-                    {row.fastest ? m.fastest : m.slowerBy(row.delta)}
-                  </span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
-      )}
-      {props.capturedAt ? (
-        <p className="mt-2 text-right font-[family-name:var(--font-hud)] text-[0.58rem] text-zinc-400 tabular-nums">{props.capturedAt.replace("T", " ").slice(0, 16)}</p>
-      ) : null}
-    </section>
+    <ol className="flex flex-col gap-2">
+      {CHANGELOG.map((entry) => (
+        <li key={entry.id} className="border border-white/10 bg-black/20 px-2 py-1.5">
+          <p className="flex flex-wrap items-center gap-2 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.08em] text-cyan-100/80 uppercase">
+            <time dateTime={entry.date}>{changelogDay(entry.date, locale)}</time>
+            <span className="text-cyan-50">{kind[entry.kind]}</span>
+          </p>
+          <p className="mt-1 text-sm leading-5 text-zinc-100">{changelogText(entry, locale)}</p>
+        </li>
+      ))}
+    </ol>
   )
+}
+
+function changelogDay(date: string, locale: ReturnType<typeof useI18n>["locale"]): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(Date.parse(`${date}T00:00:00+08:00`))
 }
 
 function tabLabel(id: IntelTab, m: Messages): string {
@@ -492,6 +663,10 @@ function tabLabel(id: IntelTab, m: Messages): string {
       return m.boundary
     case "weather":
       return m.weather
+    case "systems":
+      return m.systems
+    case "notes":
+      return m.changelog
     default: {
       const exhaustive: never = id
       return exhaustive
@@ -599,6 +774,10 @@ function emptyCopy(tab: IntelTab, m: ReturnType<typeof useI18n>["messages"]): st
       return m.emptyBoundary
     case "weather":
       return m.emptyWeather
+    case "systems":
+      return m.emptySystems
+    case "notes":
+      return m.changelog
     default: {
       const exhaustive: never = tab
       return exhaustive

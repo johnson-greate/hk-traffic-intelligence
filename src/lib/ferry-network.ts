@@ -1,4 +1,5 @@
 import piersFile from "../../data/ferry-piers.json"
+import { SUN_ROUTES } from "@/lib/ferry-routes"
 import type { FerryResponse } from "@/lib/types"
 
 type PierRecord = { id: string; nameTc: string; nameEn: string; lng: number; lat: number }
@@ -28,24 +29,30 @@ export function ferryPierFeatures(clock: FerryResponse | null): GeoJSON.FeatureC
 export function ferryVesselFeatures(clock: FerryResponse | null): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: (clock?.ok ? clock.vessels : []).map((vessel) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [vessel.lng, vessel.lat] },
-      properties: {
-        nameTc: vessel.nameTc,
-        nameEn: vessel.nameEn,
-        routes: JSON.stringify(vessel.route ? [vessel.route] : []),
-        board: JSON.stringify([{
-          route: vessel.route,
-          destTc: vessel.nameTc,
-          destEn: vessel.nameEn,
-          eta: vessel.eta,
-          minutes: null,
-          remarkTc: "",
-          remarkEn: "",
-          scheduled: false,
-        }]),
-      },
-    })),
+    features: (clock?.ok ? clock.vessels : []).map((vessel) => {
+      const sailing = SUN_ROUTES.find((item) => item.code === vessel.route)
+      return {
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [vessel.lng, vessel.lat] },
+        properties: {
+          nameTc: vessel.nameTc,
+          nameEn: vessel.nameEn,
+          routes: JSON.stringify([]),
+          board: JSON.stringify([{
+            route: vessel.route,
+            destTc: vessel.destTc || sailing?.destTc || "",
+            destEn: vessel.destEn || sailing?.destEn || "",
+            originTc: "",
+            originEn: "",
+            arriving: false,
+            eta: vessel.eta,
+            minutes: vessel.minutes,
+            remarkTc: "",
+            remarkEn: "",
+            scheduled: false,
+          }]),
+        },
+      }
+    }),
   }
 }

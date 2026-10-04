@@ -1,4 +1,4 @@
-import { isSpeedBand } from "@/lib/speed"
+import { isSpeedBand } from "./speed.ts"
 import type { SpeedBand } from "@/lib/types"
 
 export type Locale = "zh-HK" | "zh-CN" | "en"
@@ -48,13 +48,14 @@ export type Messages = {
   westernFull: string
   minutes: (n: number) => string
   approachHint: (road: string) => string
-  harbourChoice: string
   harbourFrom: string
   fromIsland: string
   fromKowloon: string
-  fastest: string
+  followMap: (road: string) => string
+  fastestHere: string
   slowerBy: (n: number) => string
-  harbourNone: string
+  harbourMissing: string
+  harbourMissingHint: string
   incident: string
   incidentsOpen: (n: number) => string
   incidentHint: string
@@ -68,12 +69,18 @@ export type Messages = {
   bad: string
   ranked: string
   roads: string
+  systems: string
+  changelog: string
+  changelogAdded: string
+  changelogFixed: string
+  changelogImproved: string
   hide: string
   intel: string
   emptyRanked: string
   emptyRoads: string
   emptyBoundary: string
   emptyWeather: string
+  emptySystems: string
   clear: string
   noFeed: string
   veryBusyCount: (n: number) => string
@@ -145,6 +152,7 @@ export type Messages = {
   facing: (direction: string) => string
   facingLabel: string
   towards: (name: string) => string
+  fromPlace: (name: string) => string
   boundLabel: string
   laneLabel: string
   classLabel: string
@@ -216,13 +224,14 @@ const en: Messages = {
   westernFull: "Western Harbour",
   minutes: (n) => `${n} min`,
   approachHint: (road) => `${road}. Show this approach on the map.`,
-  harbourChoice: "Which tunnel",
-  harbourFrom: "Starting from",
+  harbourFrom: "From",
   fromIsland: "Hong Kong Island",
   fromKowloon: "Kowloon",
-  fastest: "Fastest",
-  slowerBy: (n) => `+${n} min`,
-  harbourNone: "No crossing times from this start right now.",
+  followMap: (road) => road ? `Nearest sign · ${road}` : "Nearest sign on the map",
+  fastestHere: "Fastest of the three tunnels from this sign",
+  slowerBy: (n) => `${n} min slower than the fastest`,
+  harbourMissing: "n/a",
+  harbourMissingHint: "This sign does not publish a time for this tunnel.",
   incident: "Incident",
   incidentsOpen: (n) => (n === 1 ? "1 open" : `${n} open`),
   incidentHint: "Open special traffic news",
@@ -236,12 +245,18 @@ const en: Messages = {
   bad: "Bad",
   ranked: "Ranked",
   roads: "Roads",
+  systems: "Systems",
+  changelog: "Updates",
+  changelogAdded: "Added",
+  changelogFixed: "Fixed",
+  changelogImproved: "Improved",
   hide: "Hide",
   intel: "Intel",
   emptyRanked: "Nothing urgent on the roads, boundary, or weather.",
   emptyRoads: "No open incident, bad road, or works.",
   emptyBoundary: "Waiting for the hall feed.",
   emptyWeather: "Waiting for the Observatory.",
+  emptySystems: "Every feed is answering.",
   clear: "Clear",
   noFeed: "No feed",
   veryBusyCount: (n) => (n === 1 ? "1 very busy" : `${n} very busy`),
@@ -313,6 +328,7 @@ const en: Messages = {
   facing: (direction) => direction,
   facingLabel: "Facing",
   towards: (name) => `Towards ${name}`,
+  fromPlace: (name) => `From ${name}`,
   boundLabel: "Direction",
   laneLabel: "Lane",
   classLabel: "Class",
@@ -384,13 +400,14 @@ const zhHK: Messages = {
   westernFull: "西區海底隧道",
   minutes: (n) => `${n} 分鐘`,
   approachHint: (road) => `${road}。在地圖顯示此進路口。`,
-  harbourChoice: "過海選擇",
   harbourFrom: "起點",
   fromIsland: "港島出發",
   fromKowloon: "九龍出發",
-  fastest: "最快",
-  slowerBy: (n) => `慢 ${n} 分鐘`,
-  harbourNone: "這個起點暫時沒有過海時間。",
+  followMap: (road) => road ? `地圖最近 · ${road}` : "地圖上最近的路口",
+  fastestHere: "由此起點出發，三條隧道中最快",
+  slowerBy: (n) => `比最快慢 ${n} 分鐘`,
+  harbourMissing: "無",
+  harbourMissingHint: "這個起點沒有這條隧道的時間。",
   incident: "事故",
   incidentsOpen: (n) => `${n} 宗`,
   incidentHint: "特別交通消息",
@@ -404,12 +421,18 @@ const zhHK: Messages = {
   bad: "擠塞",
   ranked: "優先",
   roads: "道路",
+  systems: "系統",
+  changelog: "更新",
+  changelogAdded: "新增",
+  changelogFixed: "修正",
+  changelogImproved: "改進",
   hide: "收起",
   intel: "情報",
   emptyRanked: "道路、管制站及天氣暫無須優先處理的項目。",
   emptyRoads: "沒有未結束事故、擠塞路段或工程。",
   emptyBoundary: "正在等候管制站資料。",
   emptyWeather: "正在等候天文台資料。",
+  emptySystems: "各項資料正常。",
   clear: "正常",
   noFeed: "沒有資料",
   veryBusyCount: (n) => `${n} 個非常繁忙`,
@@ -481,6 +504,7 @@ const zhHK: Messages = {
   facing: (direction) => `朝${direction}`,
   facingLabel: "鏡頭",
   towards: (name) => `往${name}`,
+  fromPlace: (name) => `由${name}`,
   boundLabel: "方向",
   laneLabel: "行車線",
   classLabel: "狀況",
@@ -550,13 +574,14 @@ const zhCN: Messages = {
   westernFull: "西区海底隧道",
   minutes: (n) => `${n} 分钟`,
   approachHint: (road) => `${road}。在地图显示此进路口。`,
-  harbourChoice: "过海选择",
   harbourFrom: "起点",
   fromIsland: "港岛出发",
   fromKowloon: "九龙出发",
-  fastest: "最快",
-  slowerBy: (n) => `慢 ${n} 分钟`,
-  harbourNone: "这个起点暂时没有过海时间。",
+  followMap: (road) => road ? `地图最近 · ${road}` : "地图上最近的路口",
+  fastestHere: "由此起点出发，三条隧道中最快",
+  slowerBy: (n) => `比最快慢 ${n} 分钟`,
+  harbourMissing: "无",
+  harbourMissingHint: "这个起点没有这条隧道的时间。",
   incident: "事故",
   incidentsOpen: (n) => `${n} 宗`,
   incidentHint: "特别交通消息",
@@ -569,12 +594,18 @@ const zhCN: Messages = {
   bad: "挤塞",
   ranked: "优先",
   roads: "道路",
+  systems: "系统",
+  changelog: "更新",
+  changelogAdded: "新增",
+  changelogFixed: "修正",
+  changelogImproved: "改进",
   hide: "收起",
   intel: "情报",
   emptyRanked: "道路、管制站及天气暂无须优先处理的项目。",
   emptyRoads: "没有未结束事故、挤塞路段或工程。",
   emptyBoundary: "正在等候管制站资料。",
   emptyWeather: "正在等候天文台资料。",
+  emptySystems: "各项资料正常。",
   clear: "正常",
   noFeed: "没有资料",
   veryBusyCount: (n) => `${n} 个非常繁忙`,
@@ -645,6 +676,7 @@ const zhCN: Messages = {
   facing: (direction) => `朝${direction}`,
   facingLabel: "镜头",
   towards: (name) => `往${name}`,
+  fromPlace: (name) => `由${name}`,
   boundLabel: "方向",
   laneLabel: "行车线",
   classLabel: "状况",

@@ -37,12 +37,13 @@ import {
   trainPopup,
   workPopup,
 } from "@/components/map-cards"
-import { stopPlate, stopPlateKey, type StopPlate } from "@/lib/stop-plate"
-import { KMB_MIN_ZOOM, kmbViewKey } from "@/lib/kmb-view"
-import { displayText, type Locale, type Messages } from "@/lib/i18n"
+import { directedRouteMarks, stopPlate, stopPlateKey, type StopPlate } from "@/lib/stop-plate"
+import { GMB_MIN_ZOOM, KMB_MIN_ZOOM, kmbViewKey } from "@/lib/kmb-view"
+import { displayText, MESSAGES, type Locale, type Messages } from "@/lib/i18n"
 import { lineRecord, mtrStationCollection, mtrTrackCollection, stationPoint, stationRecord } from "@/lib/mtr-network"
 import { lrtColor, lrtPoint, lrtRoutesThrough, lrtStation, lrtStationCollection, lrtTrackCollection } from "@/lib/lrt-network"
-import { ferryPierFeatures, ferryVesselFeatures } from "@/lib/ferry-network"
+import { ferryPierFeatures } from "@/lib/ferry-network"
+import { ferryMotionFeatures, syncFerryMotion, type FerryMotion } from "@/lib/ferry-run"
 import { beginPush, endPush, type PushGate } from "@/lib/frame-push"
 import { advanceRuns, mergeRuns, runCollection, runsFromTrains, type TrainRun } from "@/lib/mtr-run"
 import { skyFor, sunAltitude } from "@/lib/sun-sky"
@@ -93,13 +94,6 @@ function mapPixelRatio(): number {
   return ratio
 }
 
-function rasterTileSize(): number {
-  // The satellite source is 256 px tiles. On a phone the pitched view asks for the
-  // next zoom level across most of the screen. Treating each tile as 512 px asks
-  // for the coarser zoom, so the first picture is about a quarter of the images.
-  return narrowScreen() ? 512 : 256
-}
-
 // OSM Bright and OSM Liberty. The files in those repositories call a keyed
 // MapTiler endpoint. OpenFreeMap publishes the same styles against its planet
 // tiles, which is the source this map already uses.
@@ -113,7 +107,9 @@ function satelliteStyle(): StyleSpecification {
       imagery: {
         type: "raster",
         tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-        tileSize: rasterTileSize(),
+        // Esri's picture is 256 px. A 512 px tile stretches that picture and the
+        // phone keeps the coarser zoom.
+        tileSize: 256,
         // Hong Kong imagery is real through zoom 19. Zoom 20 and above is Esri's
         // gray "Map Data Not Yet Available" tile, so the map scales the zoom 19 picture.
         maxzoom: 19,
@@ -124,12 +120,12 @@ function satelliteStyle(): StyleSpecification {
         tiles: [
           "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
         ],
-        tileSize: rasterTileSize(),
+        tileSize: 256,
       },
     },
     layers: [
-      { id: "satellite", type: "raster", source: "imagery" },
-      { id: "places", type: "raster", source: "labels", paint: { "raster-opacity": 0.88 } },
+      { id: "satellite", type: "raster", source: "imagery", paint: { "raster-fade-duration": 0 } },
+      { id: "places", type: "raster", source: "labels", paint: { "raster-fade-duration": 0, "raster-opacity": 0.88 } },
     ],
   }
 }
@@ -264,6 +260,7 @@ export function CityMap({
   const runsRef = useRef<TrainRun[]>([])
   const lrtRef = useRef(lrt)
   const lrtRunsRef = useRef<TrainRun[]>([])
+  const ferryMotionRef = useRef<FerryMotion[]>([])
   const onMapRef = useRef(onMap)
   const onViewRef = useRef(onView)
   const readyRef = useRef(false)
@@ -308,17 +305,22 @@ export function CityMap({
   useEffect(() => {
     const map = mapRef.current
     if (disabled || !map || !mapReady) return
+    let settle = 0
     const report = () => {
-      const centre = map.getCenter()
-      const zoom = map.getZoom()
-      const key = kmbViewKey(centre.lng, centre.lat, zoom)
-      if (viewKeyRef.current === key) return
-      viewKeyRef.current = key
-      onViewRef.current({ lng: centre.lng, lat: centre.lat, zoom })
+      window.clearTimeout(settle)
+      settle = window.setTimeout(() => {
+        const centre = map.getCenter()
+        const zoom = map.getZoom()
+        const key = kmbViewKey(centre.lng, centre.lat, zoom)
+        if (viewKeyRef.current === key) return
+        viewKeyRef.current = key
+        onViewRef.current({ lng: centre.lng, lat: centre.lat, zoom })
+      }, 800)
     }
     report()
     map.on("moveend", report)
     return () => {
+      window.clearTimeout(settle)
       map.off("moveend", report)
     }
   }, [disabled, mapReady])
@@ -350,6 +352,10 @@ export function CityMap({
       now,
     )
   }, [lrt])
+
+  useEffect(() => {
+    ferryMotionRef.current = ferry?.ok ? syncFerryMotion(ferryMotionRef.current, ferry.vessels, Date.now()) : []
+  }, [ferry])
 
   useEffect(() => {
     basemapRef.current = basemap
@@ -443,10 +449,11 @@ export function CityMap({
     // and a GeoJSON push every frame aborts the tile reload before the dot moves.
     const ios = iosWebKit()
     const pushGap = ios ? 140 : 0
-    const gates: Record<"particles" | "mtr" | "lrt", PushGate> = {
+    const gates: Record<"particles" | "mtr" | "lrt" | "ferry", PushGate> = {
       particles: { busy: false, at: 0 },
       mtr: { busy: false, at: 0 },
       lrt: { busy: false, at: 0 },
+      ferry: { busy: false, at: 0 },
     }
     let keep: HTMLDivElement | null = null
     if (ios) {
@@ -518,6 +525,12 @@ export function CityMap({
           const moving = runCollection(lrtRunsRef.current, lrtPoint)
           if (ios) pushMovingSource(lightRail, gates.lrt, moving, now, pushGap)
           else lightRail.setData(moving)
+        }
+        const boats = geoJsonSource(current, "ferry-vessels")
+        if (boats && layerShown(current, "ferry-vessels")) {
+          const moving = ferryMotionFeatures(ferryMotionRef.current, Date.now())
+          if (ios) pushMovingSource(boats, gates.ferry, moving, now, pushGap)
+          else boats.setData(moving)
         }
         refreshTrainLabels(current, now)
       }
@@ -628,17 +641,20 @@ export function CityMap({
     approachesRef.current = approaches
     const map = mapRef.current
     if (disabled || !map || !mapReady) return
-    const features: GeoJSON.Feature[] = approaches.map((point) => {
-      const colour = worstColour(point)
+    const features: GeoJSON.Feature[] = approaches.flatMap((point) => {
       const minutes = shortestMinutes(point)
-      const label = minutes == null ? "—" : messages.minutes(minutes)
+      if (minutes == null) return []
+      const colour = worstColour(point)
+      const label = messages.minutes(minutes)
       const icon = approachIconId(colour, label)
       ensureApproachIcon(map, icon, label, PILL[colour])
-      return {
-        type: "Feature",
-        properties: { id: point.id, icon },
-        geometry: { type: "Point", coordinates: point.coordinates },
-      }
+      return [
+        {
+          type: "Feature" as const,
+          properties: { id: point.id, icon },
+          geometry: { type: "Point" as const, coordinates: point.coordinates },
+        },
+      ]
     })
     geoJsonSource(map, "approaches")?.setData({ type: "FeatureCollection", features })
   }, [approaches, disabled, mapReady, locale, messages, styleEpoch])
@@ -671,9 +687,9 @@ export function CityMap({
       } else if (citybus?.ok) {
         geoJsonSource(map, "citybus-stops")?.setData(busStopCollection(map, citybus, locale, labels, "#c2410c"))
       }
-      if (!layers.gmb) {
+      if (!layers.gmb || !gmb?.ok) {
         geoJsonSource(map, "gmb-stops")?.setData(emptyCollection())
-      } else if (gmb?.ok) {
+      } else {
         geoJsonSource(map, "gmb-stops")?.setData(busStopCollection(map, gmb, locale, labels, "#65a30d"))
       }
       if (!layers.nlb) {
@@ -686,7 +702,7 @@ export function CityMap({
         geoJsonSource(map, "ferry-vessels")?.setData(emptyCollection())
       } else {
         geoJsonSource(map, "ferry-piers")?.setData(ferryPierCollection(map, ferry, locale, labels))
-        geoJsonSource(map, "ferry-vessels")?.setData(ferryVesselFeatures(ferry))
+        geoJsonSource(map, "ferry-vessels")?.setData(ferryMotionFeatures(ferryMotionRef.current, Date.now()))
       }
     }
     paint()
@@ -835,12 +851,21 @@ function stopPlateIconId(plate: StopPlate, stroke: string): string {
   return `stop-plate-${stroke.slice(1)}-${encodeURIComponent(stopPlateKey(plate))}`
 }
 
-function placeStopPlate(map: Map, name: string, routes: string[], stroke: string): string {
-  const plate = stopPlate(name, routes)
+function placeStopPlate(map: Map, name: string, routes: string[], stroke: string, options?: { perLine?: number; keepOrder?: boolean }): string {
+  const plate = stopPlate(name, routes, options)
   if (!plate.title && plate.lines.length === 0) return ""
   const icon = stopPlateIconId(plate, stroke)
   ensureStopPlate(map, icon, plate, stroke)
   return map.hasImage(icon) ? icon : ""
+}
+
+function busPlate(map: Map, locale: Locale, name: string, routes: string[], calls: { route: string; destTc: string; destEn: string }[], stroke: string): string {
+  const towards = MESSAGES[locale].towards
+  const { marks, directed } = directedRouteMarks(routes, calls.map((call) => {
+    const place = readablePlace(displayText(locale, call.destTc, call.destEn))
+    return { route: call.route, dest: place ? towards(place) : "" }
+  }))
+  return placeStopPlate(map, name, marks, stroke, directed ? { perLine: 1, keepOrder: true } : undefined)
 }
 
 function withTrainMarks(
@@ -1083,19 +1108,19 @@ function addOverlay(map: Map, layer: Parameters<Map["addLayer"]>[0], before: str
   else map.addLayer(layer)
 }
 
-function addStopLabel(map: Map, id: string, source: string, before: string | undefined) {
+function addStopLabel(map: Map, id: string, source: string, before: string | undefined, minzoom = LABEL_MIN_ZOOM, allowOverlap = true) {
   addOverlay(map, {
     id,
     type: "symbol",
     source,
-    minzoom: LABEL_MIN_ZOOM,
+    minzoom,
     filter: ["has", "icon"],
     layout: {
       "icon-image": ["get", "icon"],
       "icon-anchor": "bottom",
       "icon-offset": [0, -10],
-      "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
+      "icon-allow-overlap": allowOverlap,
+      "icon-ignore-placement": allowOverlap,
       "icon-pitch-alignment": "viewport",
       "icon-rotation-alignment": "viewport",
     },
@@ -1445,7 +1470,7 @@ function addWatchLayers(map: Map, before: string | undefined) {
       "circle-pitch-alignment": "map",
     },
   }, before)
-  addStopLabel(map, "kmb-stop-label", "kmb-stops", before)
+  addStopLabel(map, "kmb-stop-label", "kmb-stops", before, LABEL_MIN_ZOOM, false)
   addOverlay(map, {
     id: "lrt-track-casing",
     type: "line",
@@ -1507,12 +1532,12 @@ function addWatchLayers(map: Map, before: string | undefined) {
       "circle-pitch-alignment": "map",
     },
   }, before)
-  addStopLabel(map, "citybus-stop-label", "citybus-stops", before)
+  addStopLabel(map, "citybus-stop-label", "citybus-stops", before, LABEL_MIN_ZOOM, false)
   addOverlay(map, {
     id: "gmb-stops",
     type: "circle",
     source: "gmb-stops",
-    minzoom: KMB_MIN_ZOOM,
+    minzoom: GMB_MIN_ZOOM,
     paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 3.5, 16, 6],
       "circle-color": "#f7fee7",
@@ -1521,7 +1546,7 @@ function addWatchLayers(map: Map, before: string | undefined) {
       "circle-pitch-alignment": "map",
     },
   }, before)
-  addStopLabel(map, "gmb-stop-label", "gmb-stops", before)
+  addStopLabel(map, "gmb-stop-label", "gmb-stops", before, GMB_MIN_ZOOM, false)
   addOverlay(map, {
     id: "nlb-stops",
     type: "circle",
@@ -1535,7 +1560,7 @@ function addWatchLayers(map: Map, before: string | undefined) {
       "circle-pitch-alignment": "map",
     },
   }, before)
-  addStopLabel(map, "nlb-stop-label", "nlb-stops", before)
+  addStopLabel(map, "nlb-stop-label", "nlb-stops", before, LABEL_MIN_ZOOM, false)
   addOverlay(map, {
     id: "ferry-piers",
     type: "circle",
@@ -1661,8 +1686,7 @@ function busStopCollection(map: Map, board: CitybusResponse, locale: Locale, lab
     type: "FeatureCollection",
     features: board.stops.map((stop) => {
       const name = readablePlace(displayText(locale, stop.nameTc, stop.nameEn))
-      const marks = stop.routes.length > 0 ? stop.routes : stop.calls.map((call) => call.route)
-      const icon = labels ? placeStopPlate(map, name, marks, stroke) : ""
+      const icon = labels ? busPlate(map, locale, name, stop.routes, stop.calls, stroke) : ""
       return {
         type: "Feature" as const,
         geometry: { type: "Point" as const, coordinates: [stop.lng, stop.lat] },
@@ -1692,10 +1716,15 @@ function ferryPierCollection(map: Map, ferry: FerryResponse | null, locale: Loca
       try {
         const parsed: unknown = JSON.parse(board)
         if (Array.isArray(parsed)) {
+          const seen = new Set<string>()
           marks = parsed.flatMap((item) => {
             if (typeof item !== "object" || item === null) return []
-            const route = (item as { route?: unknown }).route
-            return typeof route === "string" && route ? [route] : []
+            const row = item as { destTc?: unknown; destEn?: unknown; arriving?: unknown }
+            if (row.arriving === true) return []
+            const dest = displayText(locale, typeof row.destTc === "string" ? row.destTc : "", typeof row.destEn === "string" ? row.destEn : "")
+            if (!dest || seen.has(dest)) return []
+            seen.add(dest)
+            return [dest]
           })
         }
       } catch {
@@ -1712,8 +1741,7 @@ function kmbStopCollection(map: Map, kmb: KmbResponse, locale: Locale, labels: b
     type: "FeatureCollection",
     features: kmb.stops.map((stop) => {
       const name = readablePlace(displayText(locale, stop.nameTc, stop.nameEn))
-      const marks = stop.routes.length > 0 ? stop.routes : stop.calls.map((call) => call.route)
-      const icon = labels ? placeStopPlate(map, name, marks, "#9f1239") : ""
+      const icon = labels ? busPlate(map, locale, name, stop.routes, stop.calls, "#9f1239") : ""
       return {
         type: "Feature" as const,
         geometry: { type: "Point" as const, coordinates: [stop.lng, stop.lat] },

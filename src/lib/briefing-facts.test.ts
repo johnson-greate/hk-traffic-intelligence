@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { briefingFacts, jammedRoads } from "./briefing-facts.ts"
+import { briefingFacts, fastestCrossings, jammedRoads } from "./briefing-facts.ts"
 import type { Corridor } from "./types.ts"
 
 const corridor = (id: string, roadTc: string, roadEn: string, band: Corridor["band"], speedKmh: number | null, lengthKm: number): Corridor => ({
@@ -71,5 +71,16 @@ assert.match(quiet, /Congested roads: none/)
 assert.doesNotMatch(quiet, /incident/i)
 assert.doesNotMatch(quiet, /warning/i)
 assert.doesNotMatch(quiet, /Weather: /)
+
+// The fastest time each tunnel has from any published start, tunnels in a fixed order.
+const leg = (code: string, minutes: number | null) => ({ code, name: code, minutes, colour: "green" as const })
+const start = (id: string, legs: ReturnType<typeof leg>[]) => ({ id, name: id, nameTc: id, coordinates: [0, 0] as [number, number], legs })
+assert.deepEqual(
+  fastestCrossings([start("H1", [leg("EH", 9), leg("CH", 7)]), start("H11", [leg("CH", 25), leg("EH", 5), leg("TKO", 1)]), start("K08", [leg("WH", null)])]),
+  [
+    { code: "CH", minutes: 7 },
+    { code: "EH", minutes: 5 },
+  ],
+)
 
 console.log("briefing facts ok")

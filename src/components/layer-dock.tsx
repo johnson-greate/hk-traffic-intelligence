@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useRef } from "react"
 import { useI18n } from "@/components/locale"
 import type { Messages } from "@/lib/i18n"
 import type { Basemap, WatchLayer, WatchLayers } from "@/lib/types"
@@ -100,38 +99,15 @@ const LAYERS: { id: WatchLayer; swatch: string }[] = [
 
 export function LayerDock(props: LayerDockProps) {
   const { messages: m } = useI18n()
-  const dock = useRef<HTMLDivElement>(null)
-  const { mapLive } = props
-  // On phones the intel panel stacks above the dock, so publish how much of the screen bottom the dock takes.
-  useEffect(() => {
-    const node = dock.current
-    if (!mapLive || !node) return
-    const root = document.documentElement
-    const apply = () => {
-      const parent = node.offsetParent?.getBoundingClientRect()
-      if (!parent || window.matchMedia("(min-width: 640px)").matches) {
-        root.style.removeProperty("--layer-dock-clear")
-        return
-      }
-      root.style.setProperty("--layer-dock-clear", `${Math.ceil(parent.bottom - node.getBoundingClientRect().top + 8)}px`)
-    }
-    apply()
-    const observer = new ResizeObserver(apply)
-    observer.observe(node)
-    window.addEventListener("resize", apply)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener("resize", apply)
-      root.style.removeProperty("--layer-dock-clear")
-    }
-  }, [mapLive])
-  if (!mapLive) return null
+  if (!props.mapLive) return null
   return (
     <div
-      ref={dock}
       data-map-chrome="bottom"
+      data-layer-dock=""
       className={`pointer-events-auto absolute left-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-2 lg:left-16 ${
-        props.aboveMarquee ? "bottom-30 sm:bottom-28" : "bottom-30 sm:bottom-14 lg:max-w-[calc(100%-30rem)]"
+        props.aboveMarquee
+          ? "bottom-[var(--dock-closed-bottom,9rem)] sm:bottom-28"
+          : "bottom-[var(--map-dock-bottom,7rem)] sm:bottom-14 sm:max-w-[calc(100%-24rem)] lg:max-w-[calc(100%-30rem)]"
       }`}
     >
       <div className="flex max-w-full items-center gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
@@ -184,7 +160,7 @@ export function LayerDock(props: LayerDockProps) {
       </div>
       {props.layers.speed ? (
         <p
-          className="basis-full flex flex-wrap items-center gap-x-3 gap-y-1 font-[family-name:var(--font-hud)] text-[0.68rem] tracking-[0.06em] text-cyan-50/90 uppercase max-sm:order-2"
+          className="basis-full flex flex-wrap items-center gap-x-3 gap-y-1 font-[family-name:var(--font-hud)] text-[0.68rem] tracking-[0.06em] text-cyan-50/90 uppercase"
           aria-label={m.speedKey}
         >
           {SPEED_KEY.map((band) => (

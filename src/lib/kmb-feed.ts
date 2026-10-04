@@ -4,7 +4,7 @@ import { kmbStop, kmbStopsWithin } from "@/lib/kmb-network"
 import { kmbRoutesAt, refreshKmbRoutesSoon } from "@/lib/kmb-routes"
 import { isListedKmbRow, kmbReachMetres, STOP_CAP } from "@/lib/kmb-reach"
 import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue } from "@/lib/polite-fetch"
+import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
 import { pool } from "@/lib/pool"
 import { fetchUpstream } from "@/lib/upstream"
 import type { KmbCall, KmbPlacesResponse, KmbResponse, KmbStopBoard } from "@/lib/types"
@@ -50,14 +50,18 @@ export async function loadKmbNear(lng: number, lat: number, now = Date.now(), zo
   refreshKmbRoutesSoon(now)
   forgetStale(remembered, now)
   const nearest = kmbStopsWithin(lng, lat, kmbReachMetres(zoom, lat), STOP_CAP)
-  let missed = 0
-  await pool(nearest.map((stop) => stop.id), FETCH_LIMIT, async (stopId) => {
-    const cached = remembered.get(stopId)
-    if (!etaDue(cached, now)) return
-    const rows = await fetchStop(stopId)
-    if (rows) remembered.set(stopId, { at: now, rows })
-    else missed += 1
+  const turn = await takeEtaTurn(async () => {
+    let missed = 0
+    await pool(nearest.map((stop) => stop.id), FETCH_LIMIT, async (stopId) => {
+      const cached = remembered.get(stopId)
+      if (!etaDue(cached, now)) return
+      const rows = await fetchStop(stopId)
+      if (rows) remembered.set(stopId, { at: now, rows })
+      else missed += 1
+    })
+    return missed
   })
+  const missed = turn ?? 0
 
   const stops: KmbStopBoard[] = []
   for (const stop of nearest) {
@@ -80,7 +84,7 @@ export async function loadKmbNear(lng: number, lat: number, now = Date.now(), zo
     ...(error ? { error } : {}),
     observedAt: new Date(now).toISOString(),
     stops,
-    cacheable: missed === 0,
+    cacheable: turn !== null && missed === 0,
   }
 }
 

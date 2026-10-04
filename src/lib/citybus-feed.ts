@@ -1,7 +1,7 @@
 import { arrivalPairs } from "@/lib/arrival-pairs"
 import { citybusStop, nearestCitybusStops } from "@/lib/citybus-network"
 import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue } from "@/lib/polite-fetch"
+import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
 import { pool } from "@/lib/pool"
 import { fetchUpstream } from "@/lib/upstream"
 import type { CitybusCall, CitybusPlacesResponse, CitybusResponse, CitybusStopBoard } from "@/lib/types"
@@ -45,15 +45,19 @@ export async function loadCitybusNear(lng: number, lat: number, now = Date.now()
   forgetStale(remembered, now)
   const nearest = nearestCitybusStops(lng, lat, STOP_LIMIT)
   const pairs = arrivalPairs(nearest, PAIR_BUDGET)
-  let missed = 0
-  await pool(pairs, FETCH_LIMIT, async (pair) => {
-    const key = `${pair.stopId}/${pair.route}`
-    const cached = remembered.get(key)
-    if (!etaDue(cached, now)) return
-    const rows = await fetchEta(pair.stopId, pair.route)
-    if (rows) remembered.set(key, { at: now, rows })
-    else missed += 1
+  const turn = await takeEtaTurn(async () => {
+    let missed = 0
+    await pool(pairs, FETCH_LIMIT, async (pair) => {
+      const key = `${pair.stopId}/${pair.route}`
+      const cached = remembered.get(key)
+      if (!etaDue(cached, now)) return
+      const rows = await fetchEta(pair.stopId, pair.route)
+      if (rows) remembered.set(key, { at: now, rows })
+      else missed += 1
+    })
+    return missed
   })
+  const missed = turn ?? 0
 
   const stops: CitybusStopBoard[] = []
   for (const stop of nearest) {
@@ -80,7 +84,7 @@ export async function loadCitybusNear(lng: number, lat: number, now = Date.now()
     ...(error ? { error } : {}),
     observedAt: new Date(now).toISOString(),
     stops,
-    cacheable: missed === 0,
+    cacheable: turn !== null && missed === 0,
   }
 }
 
