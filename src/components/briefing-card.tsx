@@ -30,7 +30,7 @@ function onWidthChange(notify: () => void): () => void {
   return () => query.removeEventListener("change", notify)
 }
 
-export function BriefingCard() {
+export function BriefingCard(props: { view: { lng: number; lat: number } | null }) {
   const { locale } = useI18n()
   const { data } = useLiveJson<BriefingResponse>("/api/briefing", 5 * 60_000)
   // Open on wide screens and a single button on phones, until the visitor chooses.
@@ -65,7 +65,7 @@ export function BriefingCard() {
           <p className="mt-1.5 text-right font-[family-name:var(--font-hud)] text-[0.58rem] text-zinc-400">
             {label.note} · {PROVIDER[data.provider]}
           </p>
-          <AskBox />
+          <AskBox centre={props.view ? { lng: props.view.lng, lat: props.view.lat } : null} />
         </div>
       ) : (
         <button

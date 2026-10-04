@@ -27,6 +27,20 @@ assert.equal(
 )
 // Spacing differences are not a reason to reject a quote.
 assert.ok(typeof readAnswer(answer({ answerable: true, answer: "有意外", basis: ["Open traffic incidents:  交通意外"] }), facts) === "object")
+// A quote may skip items of a "; " list, but every item it keeps must be verbatim.
+const listFacts = "Congested roads, longest first: 連翔道 Lin Cheung Road 0.8 km, slowest 16 km/h; 天影路 Tin Ying Road 0.6 km, slowest 9 km/h; 皇后大道東 Queen's Road East 0.5 km, slowest 9 km/h"
+assert.ok(
+  typeof readAnswer(answer({ answerable: true, answer: "連翔道及皇后大道東擠塞。", basis: ["Congested roads, longest first: 連翔道 Lin Cheung Road 0.8 km, slowest 16 km/h; 皇后大道東 Queen's Road East 0.5 km, slowest 9 km/h"] }), listFacts) === "object",
+)
+assert.equal(
+  readAnswer(answer({ answerable: true, answer: "皇后大道東擠塞。", basis: ["Congested roads, longest first: 連翔道 Lin Cheung Road 0.8 km, slowest 16 km/h; 皇后大道東 Queen's Road East 0.5 km, slowest 3 km/h"] }), listFacts),
+  "basis not in facts: 皇后大道東 Queen's Road East 0.5 km, slowest 3 km/h",
+)
+
+// An ellipsis marks skipped text the same way; what is kept is still checked.
+assert.ok(typeof readAnswer(answer({ answerable: true, answer: "皇后大道東擠塞。", basis: ["Congested roads, longest first: ... 皇后大道東 Queen's Road East 0.5 km, slowest 9 km/h"] }), listFacts) === "object")
+assert.ok(typeof readAnswer(answer({ answerable: true, answer: "皇后大道東擠塞。", basis: ["Congested roads, longest first: 連翔道 Lin Cheung Road 0.8 km, slowest 16 km/h… 皇后大道東 Queen's Road East 0.5 km"] }), listFacts) === "object")
+
 // Declining needs no basis.
 assert.deepEqual(readAnswer(answer({ answerable: false, answer: "我只能回答香港即時交通。", basis: [] }), facts), {
   answerable: false,
