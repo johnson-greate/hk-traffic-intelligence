@@ -32,7 +32,7 @@ Jev is TypeSafe's System One model. It does not write code or choose the next st
 
 Read `.cursor/skills/typesafe-ai/SKILL.md` and the live page for the primitive you are about to use before writing a new request. Live docs override the vendored skill: https://docs.typesafe.ai/llms.txt
 
-Ask with `node scripts/ask-jev.mjs request.json`. The script posts `state`, `model` (`~typesafe/jev-latest` if omitted), and `questions` to `https://openrouter.ai/api/alpha/decisions` using `OPENROUTER_API_KEY`. That alias is https://openrouter.ai/~typesafe/jev-latest. It does not rewrite questions. A TypeSafe API key is not used.
+Ask with `node scripts/ask-jev.mjs request.json`. The script posts `state`, `model`, and `questions`. With `TYPESAFE_API_KEY` (read from the shell or `.env`) it calls TypeSafe directly at `https://api.typesafe.ai/v1/systemone` with model `jev-latest`; otherwise it calls `https://openrouter.ai/api/alpha/decisions` with `OPENROUTER_API_KEY` and model `~typesafe/jev-latest` (https://openrouter.ai/~typesafe/jev-latest). It does not rewrite questions.
 
 Shape the request like this:
 
