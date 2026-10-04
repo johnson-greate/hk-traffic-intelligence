@@ -9,7 +9,9 @@ const URBAN_SPEED_MPS = 12
 const OPEN_SPEED_MPS = 18
 const MIN_SEGMENT_MIN = 0.8
 const MAX_SEGMENT_MIN = 8
-const HOP_TOLERANCE_MS = 150_000
+// One hop may be a minute off the spacing model. A wider match glues the
+// following Tsuen Wan train, about two minutes behind, onto the one in front.
+const HOP_TOLERANCE_MS = 75_000
 // The arrival board does not say when the train leaves. Half a minute is the stop
 // after a 0-minute reading, then the train runs the next spacing. A published
 // departure time is the leave time, so that one does not add a stop.

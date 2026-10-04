@@ -1,4 +1,4 @@
-import { standardHan } from "@/lib/camera-place"
+import { standardHan } from "./camera-place.ts"
 import type { ApproachLeg, ApproachPoint, HarbourJourney } from "@/lib/types"
 
 // HKeMobility journey-time boards whose roads approach a Victoria Harbour crossing.
@@ -37,7 +37,8 @@ export function readApproachPoints(
     const coordinates = pointOf(feature.geometry)
     if (!coordinates) continue
     const detail = detailsById[id]
-    const legs = legsOf(detail)
+    const legs = legsOf(detail).filter((leg) => leg.minutes != null)
+    if (legs.length === 0) continue
     const dated = firstDate(detail)
     if (dated && (!capturedAt || dated > capturedAt)) capturedAt = dated
     const named = text(feature.properties?.LOCATION) || textFromDetail(detail)

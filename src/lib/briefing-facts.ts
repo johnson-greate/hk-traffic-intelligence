@@ -1,4 +1,4 @@
-import type { Corridor, SpeedSummary, WeatherConditions } from "./types.ts"
+import type { ApproachPoint, Corridor, SpeedSummary, WeatherConditions } from "./types.ts"
 
 // The plain facts an AI briefing is written from. Small on purpose: the model
 // should restate what the feeds say, not infer from raw segments.
@@ -25,6 +25,22 @@ const MIN_JAM_KM = 0.5
 // The feed sometimes grades a segment congested while it reads 84 km/h; that is not a jam.
 const MAX_JAM_KMH = 40
 const HK_OFFSET_MS = 8 * 3_600_000
+
+// Each tunnel's fastest published time from any start. Kept here rather than in crossings.ts,
+// which upstream reshapes around the sign nearest the map.
+export function fastestCrossings(points: ApproachPoint[]): { code: string; minutes: number }[] {
+  const best = new Map<string, number>()
+  for (const point of points) {
+    for (const leg of point.legs) {
+      if (leg.minutes == null || !(leg.code in TUNNEL)) continue
+      best.set(leg.code, Math.min(best.get(leg.code) ?? Infinity, leg.minutes))
+    }
+  }
+  return Object.keys(TUNNEL).flatMap((code) => {
+    const minutes = best.get(code)
+    return minutes == null ? [] : [{ code, minutes }]
+  })
+}
 
 // Congested segments grouped by road, longest stretch first.
 export function jammedRoads(corridors: Corridor[], limit: number): JammedRoad[] {

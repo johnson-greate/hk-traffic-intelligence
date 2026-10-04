@@ -273,10 +273,14 @@ export type FerryCall = {
   route: string
   destTc: string
   destEn: string
+  originTc: string
+  originEn: string
+  arriving: boolean
   eta: string
   minutes: number | null
   remarkTc: string
   remarkEn: string
+  scheduled?: boolean
 }
 
 export type FerryPier = {
@@ -296,6 +300,18 @@ export type FerryVessel = {
   lat: number
   route: string
   eta: string
+  minutes: number | null
+  destTc?: string
+  destEn?: string
+  fix: "gps" | "clock"
+  fromLng?: number
+  fromLat?: number
+  toLng?: number
+  toLat?: number
+  departAt?: number | null
+  arriveAt?: number | null
+  pathLng?: number[]
+  pathLat?: number[]
 }
 
 export type FerryResponse = {
@@ -304,6 +320,7 @@ export type FerryResponse = {
   observedAt: string | null
   piers: FerryPier[]
   vessels: FerryVessel[]
+  cacheable?: boolean
 }
 
 export type WatchLayer = "speed" | "cameras" | "works" | "tolls" | "incidents" | "control" | "mtr" | "kmb" | "lrt" | "citybus" | "gmb" | "nlb" | "ferry"

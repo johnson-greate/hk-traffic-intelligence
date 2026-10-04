@@ -7,7 +7,6 @@ export function viewCachedGet<T extends OkBody>(options: {
   failed: (error: unknown) => T
   cacheKey?: (lng: number, lat: number, zoom: number) => string
 }): (request: Request) => Promise<Response> {
-  const pending = new Map<string, Promise<T>>()
   const cached = new Map<string, { at: number; body: T }>()
   return async function GET(request: Request) {
     const url = new URL(request.url)
@@ -23,10 +22,8 @@ export function viewCachedGet<T extends OkBody>(options: {
     const now = Date.now()
     const hit = cached.get(key)
     if (hit && now - hit.at < options.freshMs) return Response.json(hit.body)
-    const current = pending.get(key) ?? options.load(lng, lat, now, zoom).finally(() => pending.delete(key))
-    pending.set(key, current)
     try {
-      const body = await current
+      const body = await options.load(lng, lat, now, zoom)
       if (body.ok && body.cacheable !== false) cached.set(key, { at: Date.now(), body })
       else if (!body.ok && hit) return Response.json(hit.body)
       return Response.json(body, { status: body.ok ? 200 : 502 })

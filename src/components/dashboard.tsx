@@ -9,7 +9,7 @@ import { OpsHud } from "@/components/ops-hud"
 import { useLiveJson } from "@/components/use-live-json"
 import { useI18n } from "@/components/locale"
 import { decorateControlPoints } from "@/lib/control-points"
-import { KMB_MIN_ZOOM, KMB_POLL_MS, PLACE_POLL_MS } from "@/lib/kmb-view"
+import { GMB_MIN_ZOOM, KMB_MIN_ZOOM, KMB_POLL_MS, PLACE_POLL_MS } from "@/lib/kmb-view"
 import { inLantau } from "@/lib/lantau"
 import { PICTURE_POLL_MS } from "@/lib/picture"
 import { mergePlaceArrivals } from "@/lib/place-arrivals"
@@ -88,8 +88,12 @@ export function Dashboard() {
   const kmbUrl = layers.kmb && kmbQuery ? `/api/kmb?${kmbQuery}` : null
   const citybusPlacesUrl = layers.citybus && citybusQuery ? `/api/citybus/places?${citybusQuery}` : null
   const citybusUrl = layers.citybus && citybusQuery ? `/api/citybus?${citybusQuery}` : null
-  const gmbPlacesUrl = layers.gmb && kmbQuery ? `/api/gmb/places?${kmbQuery}` : null
-  const gmbUrl = layers.gmb && kmbQuery ? `/api/gmb?${kmbQuery}` : null
+  const gmbQuery =
+    view && view.zoom >= GMB_MIN_ZOOM
+      ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}`
+      : null
+  const gmbPlacesUrl = layers.gmb && gmbQuery ? `/api/gmb/places?${gmbQuery}` : null
+  const gmbUrl = layers.gmb && gmbQuery ? `/api/gmb?${gmbQuery}` : null
   const nlbQuery =
     view && view.zoom >= KMB_MIN_ZOOM && inLantau(view.lng, view.lat)
       ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}`
@@ -98,15 +102,15 @@ export function Dashboard() {
   const nlbUrl = layers.nlb && nlbQuery ? `/api/nlb?${nlbQuery}` : null
   const mtrLive = useLiveJson<MtrResponse>("/api/mtr", 15_000)
   const kmbPlacesLive = useLiveJson<KmbPlacesResponse>(kmbPlacesUrl, PLACE_POLL_MS)
-  const kmbLive = useLiveJson<KmbResponse>(kmbUrl, KMB_POLL_MS)
+  const kmbLive = useLiveJson<KmbResponse>(kmbUrl, KMB_POLL_MS, true)
   const lrtLive = useLiveJson<LrtResponse>(layers.lrt ? "/api/lrt" : null, 15_000)
   const citybusPlacesLive = useLiveJson<CitybusPlacesResponse>(citybusPlacesUrl, PLACE_POLL_MS)
-  const citybusLive = useLiveJson<CitybusResponse>(citybusUrl, 60_000)
+  const citybusLive = useLiveJson<CitybusResponse>(citybusUrl, 60_000, true)
   const gmbPlacesLive = useLiveJson<GmbPlacesResponse>(gmbPlacesUrl, PLACE_POLL_MS)
-  const gmbLive = useLiveJson<GmbResponse>(gmbUrl, KMB_POLL_MS)
+  const gmbLive = useLiveJson<GmbResponse>(gmbUrl, KMB_POLL_MS, true)
   const nlbPlacesLive = useLiveJson<NlbPlacesResponse>(nlbPlacesUrl, PLACE_POLL_MS)
-  const nlbLive = useLiveJson<NlbResponse>(nlbUrl, 60_000)
-  const ferryLive = useLiveJson<FerryResponse>(layers.ferry ? "/api/ferry" : null, 60_000)
+  const nlbLive = useLiveJson<NlbResponse>(nlbUrl, 60_000, true)
+  const ferryLive = useLiveJson<FerryResponse>(layers.ferry ? "/api/ferry" : null, 60_000, true)
   const kmbMerged = useMemo(
     () => mergePlaceArrivals(kmbPlacesLive.data, kmbLive.data),
     [kmbLive.data, kmbPlacesLive.data],
@@ -198,13 +202,22 @@ export function Dashboard() {
         conditions={warnings?.conditions ?? null}
         approachesError={approachesLive.error ?? (approaches && !approaches.ok ? approaches.error ?? "Crossing approaches failed." : null)}
         mapLive={mapLive}
+        pictureError={pictureError}
+        mtrError={mtrLive.error ?? (mtr && !mtr.ok ? mtr.error ?? "Next train feed failed" : null)}
+        kmbError={liveError(kmbLive.error, kmbLive.data, "KMB arrivals failed")}
+        lrtError={lrtLive.error ?? (lrt && !lrt.ok ? lrt.error ?? "Light Rail arrivals failed" : null)}
+        citybusError={liveError(citybusLive.error, citybusLive.data, "Citybus arrivals failed")}
+        gmbError={liveError(gmbLive.error, gmbLive.data, "Green minibus arrivals failed")}
+        nlbError={liveError(nlbLive.error, nlbLive.data, "New Lantao Bus arrivals failed")}
+        ferryError={liveError(ferryLive.error, ferryLive.data, "Ferry arrivals failed")}
         open={intelOpen}
         onOpenChange={setIntelOpen}
         onFocus={setFocus}
+        view={view}
       />
       <p
         data-map-chrome="bottom"
-        className="pointer-events-auto absolute bottom-1 left-2 z-30 max-w-[calc(100%-1rem)] whitespace-nowrap bg-[#041018]/92 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.72rem] leading-snug text-white sm:bottom-[0.4rem] sm:left-3 sm:max-w-[min(22rem,calc(100%-26rem))]"
+        className="pointer-events-auto absolute bottom-1 left-2 z-30 max-w-[calc(100%-1rem)] bg-[#041018]/92 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.72rem] leading-snug text-white sm:bottom-[0.4rem] sm:left-3 sm:max-w-[min(22rem,calc(100%-26rem))] sm:whitespace-nowrap"
       >
         {m.creditBy}{" "}
         <a

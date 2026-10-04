@@ -15,6 +15,7 @@ import { lineRecord, linesThrough, projectNetworkTrain, stationRecord } from "@/
 import { lrtRoutesThrough, lrtStation } from "@/lib/lrt-network"
 import { isCameraSnapshotUrl } from "@/lib/picture"
 import { isSpeedBand } from "@/lib/speed"
+import { ferryBadge, ferryLeg } from "@/lib/ferry-routes"
 import { routesWithoutArrival } from "@/lib/stop-routes"
 import type { ApproachPoint, HarbourJourney, LrtResponse, MtrCalling, MtrResponse, SpeedBand } from "@/lib/types"
 
@@ -263,7 +264,38 @@ export function nlbStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messages)
 }
 
 export function ferryStopPopup(properties: GeoJSON.GeoJsonProperties, m: Messages): HTMLElement {
-  return busStopPopup(properties, m, m.ferry, m.ferryNone)
+  const heading = readablePlace(displayText(m.locale, textProp(properties, "nameTc"), textProp(properties, "nameEn"))) || m.ferry
+  const card = openCard(heading)
+  const calls = kmbBoard(properties)
+  if (calls.length === 0) {
+    card.body.append(paragraph("city-card-copy", m.ferryNone))
+    return card.root
+  }
+  const board = document.createElement("div")
+  board.className = "city-card-board"
+  for (const call of calls) board.append(ferryCall(call, m))
+  card.body.append(board)
+  return card.root
+}
+
+function ferryCall(call: KmbBoardCall, m: Messages): HTMLElement {
+  const row = document.createElement("div")
+  row.className = call.scheduled ? "city-card-call city-card-call-plain city-card-call-timetable" : "city-card-call city-card-call-plain"
+  const badge = ferryBadge(call.route)
+  const service = displayText(m.locale, badge.tc, badge.en)
+  const leg = ferryLeg(call)
+  const place = leg ? readablePlace(displayText(m.locale, leg.tc, leg.en)) : ""
+  const remark = displayText(m.locale, call.remarkTc, call.remarkEn)
+  const headline = place ? (leg?.arriving ? m.fromPlace(place) : m.towards(place)) : service
+  const when = call.minutes == null ? remark || clock(call.eta, m.locale) : m.minutes(call.minutes)
+  row.append(
+    text("span", "city-card-call-dest", headline),
+    text("span", "city-card-call-when", when),
+  )
+  const note = call.scheduled ? remark || service : call.minutes != null && remark ? remark : ""
+  const kind = note || (service && place && service !== place ? service : "")
+  if (kind && kind !== headline) row.append(text("span", "city-card-call-kind", kind))
+  return row
 }
 
 function kmbCall(call: KmbBoardCall, m: Messages): HTMLElement {
@@ -300,6 +332,9 @@ type KmbBoardCall = {
   route: string
   destTc: string
   destEn: string
+  originTc: string
+  originEn: string
+  arriving: boolean
   eta: string
   minutes: number | null
   scheduled: boolean
@@ -323,6 +358,9 @@ function kmbBoard(properties: GeoJSON.GeoJsonProperties): KmbBoardCall[] {
         route,
         destTc: typeof row.destTc === "string" ? row.destTc : "",
         destEn: typeof row.destEn === "string" ? row.destEn : "",
+        originTc: typeof row.originTc === "string" ? row.originTc : "",
+        originEn: typeof row.originEn === "string" ? row.originEn : "",
+        arriving: row.arriving === true,
         eta: typeof row.eta === "string" ? row.eta : "",
         minutes: typeof row.minutes === "number" ? row.minutes : null,
         scheduled: row.scheduled === true,

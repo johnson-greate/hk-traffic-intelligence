@@ -1,6 +1,9 @@
-import { ferryCalls, starSailings } from "@/lib/ferry-clock"
+import { ferryCalls, ferryMinutes, starSailings } from "@/lib/ferry-clock"
+import { estimateFerryVessels, type FerryMark, type FerryTrack } from "@/lib/ferry-run"
+import { fortuneDepartureTimes, nextFortuneDepartures } from "@/lib/fortune-timetable"
+import { SUN_ROUTES } from "@/lib/ferry-routes"
 import { etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue } from "@/lib/polite-fetch"
+import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
 import { pool } from "@/lib/pool"
 import { fetchUpstream } from "@/lib/upstream"
 import type { FerryCall, FerryResponse, FerryVessel } from "@/lib/types"
@@ -11,17 +14,6 @@ type PierFile = { piers: PierRecord[] }
 
 const piers = (piersFile as PierFile).piers
 const FETCH_LIMIT = 4
-
-const SUN_ROUTES: { code: string; from: string; to: string; destTc: string; destEn: string }[] = [
-  { code: "CECC", from: "sun-central", to: "sun-cheung-chau", destTc: "長洲", destEn: "Cheung Chau" },
-  { code: "CCCE", from: "sun-cheung-chau", to: "sun-central", destTc: "中環", destEn: "Central" },
-  { code: "CEMW", from: "sun-central", to: "sun-mui-wo", destTc: "梅窩", destEn: "Mui Wo" },
-  { code: "MWCE", from: "sun-mui-wo", to: "sun-central", destTc: "中環", destEn: "Central" },
-  { code: "NPHH", from: "sun-north-point", to: "sun-hung-hom", destTc: "紅磡", destEn: "Hung Hom" },
-  { code: "HHNP", from: "sun-hung-hom", to: "sun-north-point", destTc: "北角", destEn: "North Point" },
-  { code: "NPKC", from: "sun-north-point", to: "sun-kowloon-city", destTc: "九龍城", destEn: "Kowloon City" },
-  { code: "KCNP", from: "sun-kowloon-city", to: "sun-north-point", destTc: "北角", destEn: "North Point" },
-]
 
 const HKKF_ROUTES: { id: number; from: string; to: string; fromTc: string; fromEn: string; toTc: string; toEn: string }[] = [
   { id: 1, from: "hkkf-central", to: "hkkf-sok-kwu-wan", fromTc: "中環", fromEn: "Central", toTc: "索罟灣", toEn: "Sok Kwu Wan" },
@@ -35,16 +27,40 @@ const STAR_SHEETS = [
   { url: "https://www.starferry.com.hk/sites/default/files/upload/open_data/csv/ferry_sf_wanchai_tsimshatsui_timetable_eng.csv", from: "star-wanchai", to: "star-tst" },
 ]
 
-type Clock = { route: string; destTc: string; destEn: string; eta: string; pierId: string; remarkTc: string; remarkEn: string }
+type Clock = {
+  route: string
+  destTc: string
+  destEn: string
+  originTc: string
+  originEn: string
+  arriving: boolean
+  eta: string
+  pierId: string
+  remarkTc: string
+  remarkEn: string
+  scheduled?: boolean
+}
 type SunFix = { vessel: FerryVessel | null; clocks: Clock[] }
 
 const clocks = new Map<string, HeldRows<Clock>>()
 const vessels = new Map<string, HeldRows<FerryVessel | null>>()
 let starText: { at: number; sheets: { from: string; csv: string }[] } | null = null
+let fortunePages: { at: number; pages: { pierId: string; destTc: string; destEn: string; html: string }[] } | null = null
+
+const FORTUNE_LEGS = [
+  { origin: "16", destination: "17", pierId: "sun-north-point", destTc: "觀塘", destEn: "Kwun Tong" },
+  { origin: "17", destination: "16", pierId: "fortune-kwun-tong", destTc: "北角", destEn: "North Point" },
+  { origin: "17", destination: "18", pierId: "fortune-kwun-tong", destTc: "啟德", destEn: "Kai Tak" },
+]
 
 export async function loadFerrySnapshot(now = Date.now()): Promise<FerryResponse> {
   forgetStale(clocks, now)
   forgetStale(vessels, now)
+  const turn = await takeEtaTurn(() => refreshFerryClock(now))
+  return ferryBoard(now, turn !== null)
+}
+
+async function refreshFerryClock(now: number): Promise<true> {
   const jobs = [
     ...SUN_ROUTES.map((route) => ({ key: `sun:${route.code}`, run: () => fetchSun(route) })),
     ...HKKF_ROUTES.flatMap((route) => (["inbound", "outbound"] as const).map((direction) => ({
@@ -60,14 +76,30 @@ export async function loadFerrySnapshot(now = Date.now()): Promise<FerryResponse
     if (job.key.startsWith("sun:")) vessels.set(job.key, { at: now, rows: result.vessel ? [result.vessel] : [] })
   })
   await rememberStar(now)
+  await rememberFortune(now)
+  return true
+}
 
+function ferryBoard(now: number, fresh: boolean): FerryResponse {
   const byPier = new Map<string, FerryCall[]>()
   for (const item of clocks.values()) {
     const rows = heldRows(item, now) ?? []
     for (const row of rows) {
       const timed = row.eta ? ferryCalls([row], now)[0] : null
       const call = timed ?? (row.remarkTc || row.remarkEn
-        ? { route: row.route, destTc: row.destTc, destEn: row.destEn, eta: "", minutes: null, remarkTc: row.remarkTc, remarkEn: row.remarkEn }
+        ? {
+            route: row.route,
+            destTc: row.destTc,
+            destEn: row.destEn,
+            originTc: row.originTc,
+            originEn: row.originEn,
+            arriving: row.arriving,
+            eta: "",
+            minutes: null,
+            remarkTc: row.remarkTc,
+            remarkEn: row.remarkEn,
+            scheduled: row.scheduled === true,
+          }
         : null)
       if (!call) continue
       const list = byPier.get(row.pierId) ?? []
@@ -84,12 +116,82 @@ export async function loadFerrySnapshot(now = Date.now()): Promise<FerryResponse
     calls: (byPier.get(pier.id) ?? []).sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999)).slice(0, 6),
   }))
   const moving: FerryVessel[] = []
+  const gpsRoutes = new Set<string>()
   for (const item of vessels.values()) {
     for (const vessel of heldRows(item, now) ?? []) {
-      if (vessel) moving.push(vessel)
+      if (!vessel) continue
+      gpsRoutes.add(vessel.route)
+      moving.push({ ...vessel, minutes: ferryMinutes(vessel.eta, now) })
     }
   }
-  return { ok: true, observedAt: new Date(now).toISOString(), piers: boards, vessels: moving }
+  const marks: FerryMark[] = []
+  for (const item of clocks.values()) {
+    for (const row of heldRows(item, now) ?? []) marks.push(row)
+  }
+  moving.push(...estimateFerryVessels(ferryTracks(), marks, gpsRoutes, pierPoint, now))
+  return { ok: true, observedAt: new Date(now).toISOString(), piers: boards, vessels: moving, cacheable: fresh }
+}
+
+function ferryTracks(): FerryTrack[] {
+  const tracks: FerryTrack[] = SUN_ROUTES.map((route) => ({
+    route: route.code,
+    fromId: route.from,
+    toId: route.to,
+    fromTc: route.fromTc,
+    fromEn: route.fromEn,
+    toTc: route.destTc,
+    toEn: route.destEn,
+    destTc: route.destTc,
+  }))
+  for (const route of HKKF_ROUTES) {
+    tracks.push({
+      route: String(route.id),
+      fromId: route.from,
+      toId: route.to,
+      fromTc: route.fromTc,
+      fromEn: route.fromEn,
+      toTc: route.toTc,
+      toEn: route.toEn,
+      destTc: route.toTc,
+    })
+    tracks.push({
+      route: String(route.id),
+      fromId: route.to,
+      toId: route.from,
+      fromTc: route.toTc,
+      fromEn: route.toEn,
+      toTc: route.fromTc,
+      toEn: route.fromEn,
+      destTc: route.fromTc,
+    })
+  }
+  for (const leg of FORTUNE_LEGS) {
+    const toId = leg.destination === "17" ? "fortune-kwun-tong" : leg.destination === "16" ? "sun-north-point" : ""
+    const to = toId === "fortune-kwun-tong"
+      ? { tc: "觀塘", en: "Kwun Tong" }
+      : toId === "sun-north-point"
+        ? { tc: "北角", en: "North Point" }
+        : { tc: leg.destTc, en: leg.destEn }
+    const from = leg.pierId === "sun-north-point"
+      ? { tc: "北角", en: "North Point" }
+      : { tc: "觀塘", en: "Kwun Tong" }
+    tracks.push({
+      route: "富裕",
+      fromId: leg.pierId,
+      toId,
+      fromTc: from.tc,
+      fromEn: from.en,
+      toTc: to.tc,
+      toEn: to.en,
+      destTc: leg.destTc,
+    })
+  }
+  return tracks
+}
+
+function pierPoint(id: string): { lng: number; lat: number } | null {
+  const pier = piers.find((item) => item.id === id)
+  return pier ? { lng: pier.lng, lat: pier.lat } : null
 }
 
 async function fetchSun(route: (typeof SUN_ROUTES)[number]): Promise<SunFix | null> {
@@ -104,13 +206,51 @@ async function fetchSun(route: (typeof SUN_ROUTES)[number]): Promise<SunFix | nu
     if (!row) return { vessel: null, clocks: [] }
     const depart = text(row.depart_time)
     const arrive = text(row.eta)
+    const remarkTc = text(row.rmk_tc)
+    const remarkEn = text(row.rmk_en)
     const next: Clock[] = []
-    if (depart) next.push({ route: route.code, destTc: route.destTc, destEn: route.destEn, eta: depart, pierId: route.from, remarkTc: "", remarkEn: "" })
-    if (arrive) next.push({ route: route.code, destTc: route.destTc, destEn: route.destEn, eta: arrive, pierId: route.to, remarkTc: "", remarkEn: "" })
+    if (depart) {
+      next.push({
+        route: route.code,
+        destTc: route.destTc,
+        destEn: route.destEn,
+        originTc: "",
+        originEn: "",
+        arriving: false,
+        eta: depart,
+        pierId: route.from,
+        remarkTc,
+        remarkEn,
+      })
+    }
+    if (arrive) {
+      next.push({
+        route: route.code,
+        destTc: route.destTc,
+        destEn: route.destEn,
+        originTc: route.fromTc,
+        originEn: route.fromEn,
+        arriving: true,
+        eta: arrive,
+        pierId: route.to,
+        remarkTc,
+        remarkEn,
+      })
+    }
     const lng = Number(row.lng)
     const lat = Number(row.lat)
     const vessel = Number.isFinite(lng) && Number.isFinite(lat) && lat > 22 && lat < 23 && lng > 113 && lng < 115
-      ? { id: `${route.code}-${text(row.vesselcode) || "boat"}`, nameTc: text(row.route_tc), nameEn: text(row.route_en), lng, lat, route: route.code, eta: arrive || depart }
+      ? {
+          id: `${route.code}-${text(row.vesselcode) || "boat"}`,
+          nameTc: `${route.fromTc} – ${route.destTc}`,
+          nameEn: `${route.fromEn} – ${route.destEn}`,
+          lng,
+          lat,
+          route: route.code,
+          eta: arrive || depart,
+          minutes: null,
+          fix: "gps" as const,
+        }
       : null
     return { vessel, clocks: next }
   } catch {
@@ -132,11 +272,18 @@ async function fetchHkkf(route: (typeof HKKF_ROUTES)[number], direction: "inboun
     const arrive = text(row.ETA)
     const towardsDest = direction === "outbound"
     const next: Clock[] = []
+    const destTc = towardsDest ? route.toTc : route.fromTc
+    const destEn = towardsDest ? route.toEn : route.fromEn
+    const originTc = towardsDest ? route.fromTc : route.toTc
+    const originEn = towardsDest ? route.fromEn : route.toEn
     if (depart) {
       next.push({
         route: String(route.id),
-        destTc: towardsDest ? route.toTc : route.fromTc,
-        destEn: towardsDest ? route.toEn : route.fromEn,
+        destTc,
+        destEn,
+        originTc: "",
+        originEn: "",
+        arriving: false,
         eta: depart,
         pierId: towardsDest ? route.from : route.to,
         remarkTc: "",
@@ -146,8 +293,11 @@ async function fetchHkkf(route: (typeof HKKF_ROUTES)[number], direction: "inboun
     if (arrive) {
       next.push({
         route: String(route.id),
-        destTc: towardsDest ? route.toTc : route.fromTc,
-        destEn: towardsDest ? route.toEn : route.fromEn,
+        destTc,
+        destEn,
+        originTc,
+        originEn,
+        arriving: true,
         eta: arrive,
         pierId: towardsDest ? route.to : route.from,
         remarkTc: "",
@@ -177,6 +327,54 @@ async function rememberStar(now: number): Promise<void> {
   if (!starText) return
   const rows = starSailings(starText.sheets, now)
   clocks.set("star", { at: now, rows })
+}
+
+async function rememberFortune(now: number): Promise<void> {
+  if (!fortunePages || now - fortunePages.at > 60 * 60 * 1000) {
+    const date = hongKongDate(now)
+    const pages: { pierId: string; destTc: string; destEn: string; html: string }[] = []
+    for (const leg of FORTUNE_LEGS) {
+      try {
+        const url = `https://www.fortuneferry.com.hk/zh/route-and-fare?route=3&origin=${leg.origin}&destination=${leg.destination}&departure_date=${date}`
+        const response = await etaQueue(() => fetchUpstream(url, 60 * 60 * 1000, {
+          timeoutMs: 15_000,
+          headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)" },
+        }))
+        if (response.status !== 200) continue
+        pages.push({ pierId: leg.pierId, destTc: leg.destTc, destEn: leg.destEn, html: new TextDecoder().decode(response.body) })
+      } catch {
+        // Keep the previous hour's page when one direction fails.
+      }
+    }
+    if (pages.length > 0) fortunePages = { at: now, pages }
+  }
+  if (!fortunePages) return
+  const rows: Clock[] = []
+  for (const page of fortunePages.pages) {
+    for (const eta of nextFortuneDepartures(fortuneDepartureTimes(page.html), now)) {
+      rows.push({
+        route: "富裕",
+        destTc: page.destTc,
+        destEn: page.destEn,
+        originTc: "",
+        originEn: "",
+        arriving: false,
+        eta,
+        pierId: page.pierId,
+        remarkTc: "船期",
+        remarkEn: "Timetable",
+        scheduled: true,
+      })
+    }
+  }
+  clocks.set("fortune", { at: now, rows })
+}
+
+function hongKongDate(now: number): string {
+  const hongKong = new Date(now + 8 * 60 * 60 * 1000)
+  const month = String(hongKong.getUTCMonth() + 1).padStart(2, "0")
+  const day = String(hongKong.getUTCDate()).padStart(2, "0")
+  return `${hongKong.getUTCFullYear()}-${month}-${day}`
 }
 
 function text(value: unknown): string {

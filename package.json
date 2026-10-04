@@ -10,11 +10,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "for f in src/lib/*.test.ts; do echo \"$f\"; node \"$f\" || exit 1; done",
+    "test": "for f in src/lib/*.test.ts; do echo \"$f\"; node --import ./scripts/test-alias.mjs \"$f\" || exit 1; done",
     "dev:vinext": "vite dev --port 4318",
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
-    "deploy:vinext": "vinext-cloudflare deploy"
+    "deploy:vinext": "node scripts/deploy-main.mjs",
+    "branches": "node scripts/branch-register.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

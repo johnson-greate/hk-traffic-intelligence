@@ -2,9 +2,8 @@ import { GET as getApproaches } from "@/app/api/approaches/route"
 import { GET as getIncidents } from "@/app/api/incidents/route"
 import { GET as getTraffic } from "@/app/api/traffic/route"
 import { GET as getWarnings } from "@/app/api/warnings/route"
-import { briefingFacts, type BriefingInput } from "@/lib/briefing-facts"
+import { briefingFacts, fastestCrossings, type BriefingInput } from "@/lib/briefing-facts"
 import { writeBriefing, type Briefing, type BriefingKeys, type Provider } from "@/lib/briefing-llm"
-import { bestCrossings } from "@/lib/crossings"
 import type { ApproachesResponse, IncidentsResponse, TrafficResponse, WarningsResponse } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
@@ -73,7 +72,7 @@ async function gatherFacts(load: (path: string) => Promise<Response>): Promise<B
   return {
     at: new Date(),
     traffic: traffic?.ok ? traffic : null,
-    crossings: bestCrossings(approaches?.ok ? approaches.points : []).map((row) => ({ code: row.code, minutes: row.minutes })),
+    crossings: fastestCrossings(approaches?.ok ? approaches.points : []),
     incidents: (incidents?.ok ? incidents.incidents.features : []).map((feature) => {
       const p = (feature.properties ?? {}) as Record<string, string | undefined>
       return { tc: p.nameTc ?? "", en: p.name ?? "", whereTc: p.location ?? "", whereEn: p.locationEn ?? "" }
