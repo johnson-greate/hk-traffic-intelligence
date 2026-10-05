@@ -36,7 +36,7 @@ body:
       label: 在哪裏發生？
       options:
         - 自己電腦運行的版本（localhost:4317）
-        - 網上版（hktraffic.johnson-greate.workers.dev）
+        - 網上版（traffic.resource.hk）
         - 安裝或運行時（npm install / npm run dev）
     validations:
       required: true

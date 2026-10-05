@@ -57,7 +57,7 @@
 
 ## 部署
 
-- 網站：https://hktraffic.johnson-greate.workers.dev（Cloudflare 帳號 Johnson@greate.com.hk）
+- 網站：https://traffic.resource.hk（Cloudflare 公司帳號 Brian@greate.com.hk's Account，Workers Paid；後備網址 https://hktraffic.brian-361.workers.dev）
 - 部署：`CLOUDFLARE_ACCOUNT_ID=<帳號 ID> npm run deploy:vinext`，需要先 `npx cf auth login`。D1 database 會在第一次部署時自動建立
 - 本地測試歷史數據要用 `npm run dev:vinext`（port 4318）
 - `main` 受 ruleset `protect-main` 保護：禁止刪除、禁止 force push，PR 須通過 CI `checks` 才可 merge；所有改動（包括文件）都經 PR
