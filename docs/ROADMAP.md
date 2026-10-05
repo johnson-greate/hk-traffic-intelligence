@@ -17,7 +17,7 @@
 
 | 狀態 | 項目 | 內容 | 工作量 | PR |
 | --- | --- | --- | --- | --- |
-| ✅ | 快照存儲 | Cloudflare Cron 每 5 分鐘把全城車速、各路段車速和過海時間存入 D1，保留 30 日；`/api/history` 讀取最近 48 小時。2026-10-02 22:35 起在線上累積數據。⚠️ 免費計劃 CPU 上限令 Cron 間歇失敗，數據有斷開，見已知問題 | 中 | [#2](https://github.com/johnson-greate/hk-traffic-intelligence/pull/2) |
+| ✅ | 快照存儲 | Cloudflare Cron 每 5 分鐘把全城車速、各路段車速和過海時間存入 D1，保留 30 日；`/api/history` 讀取最近 48 小時。2026-10-02 22:35 起在線上累積數據。2026-10-05 之前喺免費計劃，Cron 晚間全部失敗，數據有斷開；搬到 Workers Paid 後應已解決（待核實通宵記錄） | 中 | [#2](https://github.com/johnson-greate/hk-traffic-intelligence/pull/2) |
 | ⬜ | 「比平時」基準 | 以歷史快照計算同一時段的正常值，顯示「比平時慢 40%」。需要先累積一至兩星期數據 | 中 | |
 | ⬜ | 24 小時回放 | 時間軸 slider，播放全城交通變化。需要先累積 24 小時數據 | 中至大 | |
 
@@ -57,8 +57,8 @@
 
 ## 部署
 
-- 網站：https://traffic.resource.hk（Cloudflare 公司帳號 Brian@greate.com.hk's Account，Workers Paid；後備網址 https://hktraffic.brian-361.workers.dev）
-- 部署：`CLOUDFLARE_ACCOUNT_ID=<帳號 ID> npm run deploy:vinext`，需要先 `npx cf auth login`。D1 database 會在第一次部署時自動建立
+- 網站：https://traffic.resource.hk（Cloudflare 公司帳號 Brian@greate.com.hk's Account，Workers Paid，2026-10-05 起）。舊網址 https://hktraffic.johnson-greate.workers.dev 係搬遷前嘅個人帳號版本，保留做後備，cron 已停，數據唔再更新
+- 部署：`CLOUDFLARE_ACCOUNT_ID=<公司帳號 ID> npm run deploy:vinext`，需要先 `npx cf auth login`（授權公司帳號）。全新帳號第一次部署要用 `npx cf deploy --prebuilt --secrets-file <檔案>` 連 secret 一齊上傳
 - 本地測試歷史數據要用 `npm run dev:vinext`（port 4318）
 - `main` 受 ruleset `protect-main` 保護：禁止刪除、禁止 force push，PR 須通過 CI `checks` 才可 merge；所有改動（包括文件）都經 PR
 
@@ -69,8 +69,9 @@
 - 頂部隧道時間顯示的是 8 個起點之中最快的一個，並非用戶所在位置的時間。過海決策卡已提供逐個起點的時間，頂部數字本身未改。
 - 開放數據沒有隧道收費金額，所以決策卡未包括收費。如要加入，需要以運輸署公布的分時收費表為準。
 - 天空與地面交界是一條硬邊。霧化需要 3D 地形才能柔化，而地圖目前關閉了地形。
-- `traffic.resource.hk` 未綁定。`resource.hk` 在另一個 Cloudflare 帳號，該帳號未有 Workers 權限；Worker 與域名須在同一帳號。
-- **Cloudflare 免費計劃 CPU 上限（每次 10 ms）不足。** 2026-10-03 用 `wrangler tail` 證實：每次快照 Cron 用 110–210 ms CPU，會間歇以 `exceededCpu` 被停止，數據因此斷開幾個鐘；訪客請求亦一樣，約一小時內有 75 次失敗（九巴、城巴、快拍最多）。決定：暫時維持免費計劃，接受斷續。升級 Workers Paid（US$5／月，CPU 上限 30 秒）即可解決，無需改程式。回放會有空檔，「比平時」需要累積更長時間。
+- ~~Cloudflare 免費計劃 CPU 上限（每次 10 ms）不足。~~ 2026-10-05 已搬到公司帳號 Workers Paid（Calvin 批）。原記錄： 2026-10-03 用 `wrangler tail` 證實：每次快照 Cron 用 110–210 ms CPU，會間歇以 `exceededCpu` 被停止，數據因此斷開幾個鐘；訪客請求亦一樣，約一小時內有 75 次失敗（九巴、城巴、快拍最多）。決定：暫時維持免費計劃，接受斷續。升級 Workers Paid（US$5／月，CPU 上限 30 秒）即可解決，無需改程式。回放會有空檔，「比平時」需要累積更長時間。
 - 英文介面在手機闊度下，頂部語言切換按鈕右邊被裁走少許（原有問題）。
-- 免費計劃：交通 JSON 間中喺傳送途中被截斷（`Unterminated string in JSON at position …`），係 CPU 超標被 Cloudflare 停止，非程式錯誤；升級 Workers Paid 可解決（需老闆批）。
-- 已向原作者提交 4 個 PR（keithligh/hk-traffic-intelligence #3 至 #6），截至 2026-10-03 晚未有回覆。
+- 免費計劃：交通 JSON 間中喺傳送途中被截斷（`Unterminated string in JSON at position …`），係 CPU 超標被 Cloudflare 停止。2026-10-05 搬到 Workers Paid 後應已解決。
+- 已向原作者提交 5 個 PR（keithligh/hk-traffic-intelligence #3 至 #7），2026-10-04 全部被 close：佢唔要 AI 層同純外觀改動，lint 改動佢自己加。
+- 新 Worker 啱啱啟動、快取未有數據時，問答讀唔到隧道數據，會用另一個起點作答，而且冇「頂部列顯示緊另一個路口」嘅提示。
+- `hktraffic.brian-361.workers.dev` 喺設定咗自訂域名之後被 Cloudflare 自動停用（error 1042），只可用 traffic.resource.hk。
