@@ -7,6 +7,8 @@ export default defineConfig({
     compatibilityDate: "2026-09-29",
     compatibilityFlags: ["nodejs_compat"],
     assets: { notFoundHandling: "none" },
+    // The resource.hk zone is in the same Cloudflare account as this Worker.
+    domains: ["traffic.resource.hk"],
     triggers: [triggers.scheduled({ schedule: "*/5 * * * *" })],
     env: {
       ASSETS: bindings.assets(),
