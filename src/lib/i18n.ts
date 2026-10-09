@@ -987,11 +987,15 @@ const DISTRICTS: Record<string, string> = {
   Islands: "離島",
 }
 
+export function publishedSimplified(value: string): string {
+  return value.replaceAll("\u{2B6AD}", "\u9C72")
+}
+
 export function displayText(locale: Locale, traditional: string, english: string): string {
   if (locale === "en") return english || traditional
   const source = traditional || english
   if (!source) return ""
-  if (locale === "zh-CN") return simplified ? simplified(source) : source
+  if (locale === "zh-CN") return publishedSimplified(simplified ? simplified(source) : source)
   return source
 }
 
