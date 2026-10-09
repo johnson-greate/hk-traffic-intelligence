@@ -1,4 +1,5 @@
 import { readApproachPoints } from "@/lib/approaches"
+import { detailIsDue, failedDetail } from "@/lib/detail-retry"
 import { fetchText } from "@/lib/fetch-text"
 import { parseJourneyTimes } from "@/lib/journey-times"
 import { pool } from "@/lib/pool"
@@ -65,16 +66,12 @@ const detailCache = new Map<string, { at: number; body: unknown }>()
 
 async function loadDetails(ids: readonly string[]): Promise<Record<string, unknown>> {
   const now = Date.now()
-  const missing = ids.filter((id) => {
-    const hit = detailCache.get(id)
-    return !hit || now - hit.at >= PLACE_MS
-  })
+  const missing = ids.filter((id) => detailIsDue(detailCache.get(id), now, PLACE_MS))
   await pool(missing, DETAIL_LIMIT, async (id) => {
     try {
       detailCache.set(id, { at: Date.now(), body: await readJson(detailUrl(id), PLACE_MS, 8_000) })
     } catch {
-      const previous = detailCache.get(id)
-      if (!previous) detailCache.set(id, { at: Date.now() - PLACE_MS + 5 * 60_000, body: null })
+      detailCache.set(id, failedDetail(detailCache.get(id), Date.now(), PLACE_MS))
     }
   })
   const details: Record<string, unknown> = {}
