@@ -52,8 +52,8 @@ async function loadApproaches(): Promise<ApproachesResponse> {
   const placed = await loadPlaces()
   const minutes = parseJourneyTimes(await fetchText(JOURNEY_URL, FRESH_MS))
   const ids = [...new Set(minutes.map((row) => row.locationId))]
-  const detailsById = await loadDetails(ids)
-  const { points, capturedAt } = readApproachPoints(placed.locations, detailsById, placed.traditional, minutes)
+  const details = await loadDetails(ids)
+  const { points, capturedAt } = readApproachPoints(placed.locations, details.en, placed.traditional, minutes, details.tc)
   return {
     ok: points.length > 0,
     error: points.length === 0 ? "No journey times were returned." : undefined,
@@ -64,22 +64,28 @@ async function loadApproaches(): Promise<ApproachesResponse> {
 
 const detailCache = new Map<string, { at: number; body: unknown }>()
 
-async function loadDetails(ids: readonly string[]): Promise<Record<string, unknown>> {
+async function loadDetails(ids: readonly string[]): Promise<{ en: Record<string, unknown>; tc: Record<string, unknown> }> {
   const now = Date.now()
-  const missing = ids.filter((id) => detailIsDue(detailCache.get(id), now, PLACE_MS))
-  await pool(missing, DETAIL_LIMIT, async (id) => {
+  const jobs = ids.flatMap((id) =>
+    (["en", "tc"] as const).flatMap((lang) => (detailIsDue(detailCache.get(detailKey(lang, id)), now, PLACE_MS) ? [{ id, lang }] : [])),
+  )
+  await pool(jobs, DETAIL_LIMIT, async ({ id, lang }) => {
+    const key = detailKey(lang, id)
     try {
-      detailCache.set(id, { at: Date.now(), body: await readJson(detailUrl(id), PLACE_MS, 8_000) })
+      detailCache.set(key, { at: Date.now(), body: await readJson(detailUrl(id, lang), PLACE_MS, 8_000) })
     } catch {
-      detailCache.set(id, failedDetail(detailCache.get(id), Date.now(), PLACE_MS))
+      detailCache.set(key, failedDetail(detailCache.get(key), Date.now(), PLACE_MS))
     }
   })
-  const details: Record<string, unknown> = {}
+  const en: Record<string, unknown> = {}
+  const tc: Record<string, unknown> = {}
   for (const id of ids) {
-    const hit = detailCache.get(id)
-    if (hit && hit.body != null) details[id] = hit.body
+    const english = detailCache.get(detailKey("en", id))
+    const traditional = detailCache.get(detailKey("tc", id))
+    if (english?.body != null) en[id] = english.body
+    if (traditional?.body != null) tc[id] = traditional.body
   }
-  return details
+  return { en, tc }
 }
 
 async function loadPlaces(): Promise<{ at: number; locations: unknown; traditional: unknown }> {
@@ -96,8 +102,12 @@ async function loadPlaces(): Promise<{ at: number; locations: unknown; tradition
   }
 }
 
-function detailUrl(id: string): string {
-  return `https://www.hkemobility.gov.hk/api/drss/getTextInfo/JourneyTime/en/${encodeURIComponent(id)}`
+function detailKey(lang: "en" | "tc", id: string): string {
+  return `${lang}:${id}`
+}
+
+function detailUrl(id: string, lang: "en" | "tc"): string {
+  return `https://www.hkemobility.gov.hk/api/drss/getTextInfo/JourneyTime/${lang}/${encodeURIComponent(id)}`
 }
 
 async function readJson(url: string, ttlMs = FRESH_MS, timeoutMs = 15_000): Promise<unknown> {

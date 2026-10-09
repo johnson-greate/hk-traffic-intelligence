@@ -60,6 +60,7 @@ export type HarbourJourney = {
 export type ApproachLeg = {
   code: string
   name: string
+  nameTc: string
   minutes: number | null
   colour: HarbourJourney["colour"]
 }

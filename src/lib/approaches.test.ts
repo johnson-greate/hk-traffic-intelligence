@@ -53,12 +53,21 @@ const minutes: JourneyMinute[] = [
   { locationId: "H2", destinationId: "CH", minutes: 12, colour: "amber", capturedAt: "2026-10-09T21:58:00" },
   { locationId: "H6", destinationId: "ABT", minutes: 8, colour: "green", capturedAt: "2026-10-09T21:59:00" },
 ]
+const named = readApproachPoints(wfs, {
+  H6: [{ dest: { did: "ABT", desc: "Wan Chai via<br>Aberdeen Tunnel" } }],
+}, null, minutes, {
+  H6: [{ dest: { did: "ABT", desc: "灣仔\u3000經<br>香港仔隧道" } }],
+})
+assert.equal(named.points.find((point) => point.id === "H6")?.legs[0]?.name, "Wan Chai via Aberdeen Tunnel")
+assert.equal(named.points.find((point) => point.id === "H6")?.legs[0]?.nameTc, "灣仔 經 香港仔隧道")
+
 const joined = readApproachPoints(wfs, {
   H6: [{ dest: { did: "ABT", desc: "Wan Chai via<br>Aberdeen Tunnel" } }],
 }, null, minutes)
 assert.deepEqual(joined.points.map((point) => point.id), ["H2", "H6"])
 assert.equal(joined.points.find((point) => point.id === "H2")?.legs[0]?.minutes, 12)
 assert.equal(joined.points.find((point) => point.id === "H6")?.legs[0]?.name, "Wan Chai via Aberdeen Tunnel")
+assert.equal(joined.points.find((point) => point.id === "H6")?.legs[0]?.nameTc, "")
 assert.equal(joined.capturedAt, "2026-10-09T21:59:00")
 assert.deepEqual(
   joined.points.find((point) => point.id === "H6")?.legs.map((leg) => leg.code).filter((code) => HARBOUR.includes(code)),

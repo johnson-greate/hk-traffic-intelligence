@@ -15,6 +15,7 @@ export function readApproachPoints(
   detailsById: Readonly<Record<string, unknown>>,
   traditionalWfs: unknown = null,
   minutes: readonly JourneyMinute[] | null = null,
+  traditionalDetails: Readonly<Record<string, unknown>> | null = null,
 ): { points: ApproachPoint[]; capturedAt: string | null } {
   const traditional = locationNames(traditionalWfs)
   const byLocation = minutesByLocation(minutes)
@@ -28,7 +29,8 @@ export function readApproachPoints(
     if (!coordinates) continue
     const detail = detailsById[id]
     const published = byLocation?.get(id)
-    const legs = (published ? legsFromMinutes(published, detail) : legsOf(detail)).filter((leg) => leg.minutes != null)
+    const traditionalDetail = traditionalDetails?.[id]
+    const legs = (published ? legsFromMinutes(published, detail, traditionalDetail) : legsOf(detail, traditionalDetail)).filter((leg) => leg.minutes != null)
     if (legs.length === 0) continue
     const dated = published ? latestCapture(published) : firstDate(detail)
     if (dated && (!capturedAt || dated > capturedAt)) capturedAt = dated
@@ -72,13 +74,14 @@ function minutesByLocation(minutes: readonly JourneyMinute[] | null): Map<string
   return grouped
 }
 
-function legsFromMinutes(rows: readonly JourneyMinute[], detail: unknown): ApproachLeg[] {
+function legsFromMinutes(rows: readonly JourneyMinute[], detail: unknown, traditional: unknown): ApproachLeg[] {
   const byCode = new Map<string, ApproachLeg>()
   for (const row of rows) {
     if (byCode.has(row.destinationId)) continue
     byCode.set(row.destinationId, {
       code: row.destinationId,
-      name: destinationName(detail, row.destinationId),
+      name: destinationSentence(detail, row.destinationId) || crossingName(row.destinationId),
+      nameTc: traditionalName(traditional, row.destinationId),
       minutes: row.minutes,
       colour: row.colour,
     })
@@ -86,7 +89,7 @@ function legsFromMinutes(rows: readonly JourneyMinute[], detail: unknown): Appro
   return ordered(byCode)
 }
 
-function legsOf(detail: unknown): ApproachLeg[] {
+function legsOf(detail: unknown, traditional: unknown): ApproachLeg[] {
   if (!Array.isArray(detail)) return []
   const byCode = new Map<string, ApproachLeg>()
   for (const row of detail) {
@@ -96,6 +99,7 @@ function legsOf(detail: unknown): ApproachLeg[] {
     byCode.set(code, {
       code,
       name: plain(text(row.dest.desc)) || crossingName(code),
+      nameTc: traditionalName(traditional, code),
       minutes: minutesOf(row.dest.time),
       colour: colourOf(row.dest.cid),
     })
@@ -126,16 +130,20 @@ function latestCapture(rows: readonly JourneyMinute[]): string | null {
   return latest || null
 }
 
-function destinationName(detail: unknown, code: string): string {
-  if (Array.isArray(detail)) {
-    for (const row of detail) {
-      if (!isRecord(row) || !isRecord(row.dest)) continue
-      if (text(row.dest.did) !== code) continue
-      const name = plain(text(row.dest.desc))
-      if (name) return name
-    }
+function traditionalName(detail: unknown, code: string): string {
+  const name = destinationSentence(detail, code)
+  return name ? standardHan(name) : ""
+}
+
+function destinationSentence(detail: unknown, code: string): string {
+  if (!Array.isArray(detail)) return ""
+  for (const row of detail) {
+    if (!isRecord(row) || !isRecord(row.dest)) continue
+    if (text(row.dest.did) !== code) continue
+    const name = plain(text(row.dest.desc))
+    if (name) return name
   }
-  return crossingName(code)
+  return ""
 }
 
 function firstDate(detail: unknown): string | null {
@@ -201,7 +209,7 @@ function plain(value: string): string {
   return value
     .replace(/<br\s*\/?>/gi, " ")
     .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/[\s\u3000]+/g, " ")
     .trim()
 }
 

@@ -58,7 +58,7 @@ export function approachPopup(point: ApproachPoint, m: Messages): HTMLElement {
   const detail = placeLine(place, m)
   if (detail) card.head.append(paragraph("city-card-detail", detail))
   for (const leg of point.legs) {
-    const name = crossingLegName(leg.code, leg.name, m)
+    const name = crossingLegName(leg, m)
     const value = leg.minutes == null ? m.noReading : m.minutes(leg.minutes)
     card.body.append(fact(name, value, minuteTone(leg.colour)))
   }
@@ -779,11 +779,11 @@ function positionSentence(spot: TrainSpot, m: Messages): string {
   return m.mtrBetween(fromName, toName)
 }
 
-function crossingLegName(code: string, fallback: string, m: Messages): string {
-  if (code === "CH") return m.crossFull
-  if (code === "EH") return m.easternFull
-  if (code === "WH") return m.westernFull
-  return displayText(m.locale, "", fallback)
+function crossingLegName(leg: ApproachPoint["legs"][number], m: Messages): string {
+  if (leg.code === "CH") return m.crossFull
+  if (leg.code === "EH") return m.easternFull
+  if (leg.code === "WH") return m.westernFull
+  return displayText(m.locale, leg.nameTc, leg.name)
 }
 
 function placeLine(place: CameraPlace, m: Messages): string {
