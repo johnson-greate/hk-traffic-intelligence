@@ -24,9 +24,9 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
     id: "2026-10-09-other-journey-minutes",
     date: "2026-10-09",
     kind: "added",
-    en: "Journey minutes for the other tunnels and gaps appear on the sign that publishes them. The three harbour times stay on the bar.",
-    tc: "其他隧道和山口的行車時間，顯示在公布該時間的標誌上。三條過海時間仍留在橫條上。",
-    sc: "其他隧道和山口的行车时间，显示在公布该时间的标志上。三条过海时间仍留在横条上。",
+    en: "Journey minutes for the other tunnels and roads appear on the sign that publishes them. The three harbour times stay on the bar.",
+    tc: "其他隧道和道路的行車時間，顯示在公布該時間的標誌上。三條過海時間仍留在橫條上。",
+    sc: "其他隧道和道路的行车时间，显示在公布该时间的标志上。三条过海时间仍留在横条上。",
   },
   {
     id: "2026-10-08-intel-layer",
