@@ -1,4 +1,6 @@
 import networkFile from "../../data/nlb-network.json" with { type: "json" }
+import { nearestMetres, spreadWithin } from "@/lib/nearest"
+import { indexPoints, mates } from "@/lib/point-index"
 import { inLantau } from "./lantau.ts"
 
 type Service = { id: string; code: string }
@@ -15,20 +17,22 @@ for (const [id, stop] of Object.entries(network.stops)) {
 
 export { inLantau }
 
+const pointIndex = indexPoints(stopList)
+
 export function nlbStop(id: string): StopRecord | null {
   return network.stops[id] ?? null
 }
 
+export function nlbPoleIds(id: string): string[] {
+  const stop = network.stops[id]
+  if (!stop) return []
+  return mates(pointIndex, id, stop.lng, stop.lat)
+}
+
 export function nearestNlbStops(lng: number, lat: number, limit: number): NlbStopPoint[] {
-  if (!inLantau(lng, lat)) return []
-  const cos = Math.cos((lat * Math.PI) / 180)
-  return stopList
-    .map((point) => {
-      const east = (point.lng - lng) * cos * 111_320
-      const north = (point.lat - lat) * 110_540
-      return { point, distance: east * east + north * north }
-    })
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, limit)
-    .map((item) => item.point)
+  return nearestMetres(stopList, lng, lat, limit)
+}
+
+export function nlbStopsSpread(lng: number, lat: number, radiusMetres: number, limit: number): NlbStopPoint[] {
+  return spreadWithin(stopList, lng, lat, radiusMetres, limit)
 }

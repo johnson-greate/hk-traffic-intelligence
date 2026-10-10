@@ -15,7 +15,6 @@ const FETCH_LIMIT = 4
 type Remembered = { at: number; board: MtrBoard; observations: TrainObservation[] }
 
 const remembered = new Map<string, Remembered>()
-// Not this worker's host. A cache key on our own host can wait on the request that is writing it.
 const MEMORY_URL = "https://hktraffic-cache.invalid/mtr-board-memory"
 let blockedUntil = 0
 let failures = 0
@@ -23,7 +22,6 @@ let failures = 0
 type SavedMemory = { stations: { key: string; at: number; board: MtrBoard; observations: TrainObservation[] }[] }
 
 // Station positions stay in the network file. These calls are only the next-train
-// clock. The published feed answers 429 if all 120 station calls arrive together,
 // so each refresh reads 16. The shared book is which stations we already know.
 // The next 16 are chosen so every line, including Tsuen Wan, is read before a
 // line that was just read gets another turn.

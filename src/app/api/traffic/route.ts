@@ -2,6 +2,7 @@ import { parseCsv } from "@/lib/csv"
 import { fetchUpstream } from "@/lib/upstream"
 import { buildCorridors, laneSpeed, type DetectorSite } from "@/lib/corridors"
 import { fetchText } from "@/lib/fetch-text"
+import { speedReadingComplete, speedReadingTtl } from "@/lib/speed"
 import {
   corridorsFromSegments,
   lamppostCorridors,
@@ -61,10 +62,10 @@ function failedNetwork(error?: string): NetworkStatus {
   }
 }
 
-const FRESH_MS = 60_000
+const SPEED_HOLD_MS = 2_500
 
-let pending: Promise<TrafficResponse> | null = null
-let cached: { at: number; body: TrafficResponse } | null = null
+let pending: Promise<{ body: TrafficResponse; complete: boolean }> | null = null
+let cached: { at: number; ttl: number; body: TrafficResponse } | null = null
 
 export async function GET(request: Request) {
   const simulate = new URL(request.url).searchParams.get("simulate")
@@ -88,13 +89,14 @@ export async function GET(request: Request) {
   }
 
   const now = Date.now()
-  if (cached && now - cached.at < FRESH_MS) return Response.json(cached.body)
+  if (cached && now - cached.at < cached.ttl) return Response.json(cached.body)
   pending ??= loadTraffic().finally(() => {
     pending = null
   })
   try {
-    const body = await pending
-    if (body.ok) cached = { at: Date.now(), body }
+    const reading = await pending
+    const body = reading.body
+    if (body.ok) cached = { at: Date.now(), ttl: speedReadingTtl(reading.complete), body }
     else if (cached) return Response.json(cached.body)
     return Response.json(body, { status: body.ok ? 200 : 502 })
   } catch (error) {
@@ -112,17 +114,17 @@ export async function GET(request: Request) {
   }
 }
 
-async function loadTraffic(): Promise<TrafficResponse> {
+async function loadTraffic(): Promise<{ body: TrafficResponse; complete: boolean }> {
   const [locations, raw, segments, network, centerlines, lampposts, lamppostSpeeds, saturation] =
-    await Promise.allSettled([
-      fetchText(LOCATIONS, 6 * 60 * 60 * 1000),
-      fetchText(RAW_SPEEDS, 45_000),
-      fetchText(SEGMENT_SPEEDS, 45_000),
-      fetchText(NETWORK_DATE, 6 * 60 * 60 * 1000),
-      loadCenterlines(),
-      fetchText(LAMPPOSTS, 6 * 60 * 60 * 1000),
-      fetchText(LAMPPOST_SPEEDS, 45_000),
-      loadSaturation(),
+    await Promise.all([
+      settle(fetchText(LOCATIONS, 6 * 60 * 60 * 1000)),
+      settle(fetchText(RAW_SPEEDS, 45_000)),
+      settle(fetchText(SEGMENT_SPEEDS, 45_000)),
+      settle(fetchText(NETWORK_DATE, 6 * 60 * 60 * 1000)),
+      settle(loadCenterlines()),
+      held(fetchText(LAMPPOSTS, 6 * 60 * 60 * 1000), SPEED_HOLD_MS),
+      held(fetchText(LAMPPOST_SPEEDS, 45_000), SPEED_HOLD_MS),
+      held(loadSaturation(), SPEED_HOLD_MS),
     ])
 
   const segmentParsed = segments.status === "fulfilled" ? parseSegments(segments.value) : null
@@ -155,7 +157,7 @@ async function loadTraffic(): Promise<TrafficResponse> {
       segments: segmentSummary,
       network: networkStatusFrom(network, false),
     }
-    return body
+    return { body, complete: false }
   }
 
   const detector =
@@ -183,7 +185,13 @@ async function loadTraffic(): Promise<TrafficResponse> {
     segments: segmentSummary,
     network: networkStatusFrom(network, Boolean(drawn)),
   }
-  return body
+  const complete = speedReadingComplete(
+    drawn != null,
+    lampposts.status === "fulfilled",
+    lamppostSpeeds.status === "fulfilled",
+    saturation.status === "fulfilled",
+  )
+  return { body, complete }
 }
 
 function drawnFromNetwork(
@@ -205,10 +213,35 @@ function drawnFromNetwork(
 
 let saturationCache: { expires: number; levels: Map<string, string> } | null = null
 
+function settle<T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> {
+  return promise.then(
+    (value) => ({ status: "fulfilled", value }),
+    (reason) => ({ status: "rejected", reason }),
+  )
+}
+
+function held<T>(promise: Promise<T>, ms: number): Promise<PromiseSettledResult<T>> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      resolve({ status: "rejected", reason: new Error("continued without this file") })
+    }, ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve({ status: "fulfilled", value })
+      },
+      (reason) => {
+        clearTimeout(timer)
+        resolve({ status: "rejected", reason })
+      },
+    )
+  })
+}
+
 async function loadSaturation(): Promise<Map<string, string>> {
   if (saturationCache && saturationCache.expires > Date.now()) return saturationCache.levels
   const response = await fetchUpstream(SATURATION_URL, 60_000, {
-    timeoutMs: 40_000,
+    timeoutMs: 8_000,
     headers: {
       Accept: "application/json",
       Referer: "https://www.hkemobility.gov.hk/en/",

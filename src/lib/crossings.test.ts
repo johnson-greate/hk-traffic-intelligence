@@ -20,13 +20,13 @@ function point(id: string, name: string, lng: number, lat: number, legs: Approac
 }
 
 const island = point("H2", "堅拿道天橋", 114.18, 22.27, [
-  { code: "CH", name: "Cross Harbour Tunnel", minutes: 7, colour: "green" },
-  { code: "EH", name: "Eastern Harbour Crossing", minutes: 9, colour: "green" },
-  { code: "WH", name: "Western Harbour Crossing", minutes: 12, colour: "amber" },
+  { code: "CH", name: "Cross Harbour Tunnel", nameTc: "", minutes: 7, colour: "green" },
+  { code: "EH", name: "Eastern Harbour Crossing", nameTc: "", minutes: 9, colour: "green" },
+  { code: "WH", name: "Western Harbour Crossing", nameTc: "", minutes: 12, colour: "amber" },
 ])
 const kowloon = point("K02", "加士居道", 114.18, 22.3, [
-  { code: "CH", name: "Cross Harbour Tunnel", minutes: 16, colour: "amber" },
-  { code: "EH", name: "Eastern Harbour Crossing", minutes: 13, colour: "green" },
+  { code: "CH", name: "Cross Harbour Tunnel", nameTc: "", minutes: 16, colour: "amber" },
+  { code: "EH", name: "Eastern Harbour Crossing", nameTc: "", minutes: 13, colour: "green" },
 ])
 
 const fromIsland = crossingsFrom(island)

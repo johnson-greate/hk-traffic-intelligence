@@ -1,14 +1,12 @@
-import { arrivalPairs } from "@/lib/arrival-pairs"
-import { citybusStop, nearestCitybusStops } from "@/lib/citybus-network"
-import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
-import { pool } from "@/lib/pool"
-import { fetchUpstream } from "@/lib/upstream"
+import { citybusPoleIds, citybusStop, citybusStopsSpread, nearestCitybusStops } from "@/lib/citybus-network"
+import { kmbReachMetres } from "@/lib/kmb-reach"
+import { readEtaJson } from "@/lib/eta-read"
+import { loadPoleBoard } from "@/lib/pole-board"
 import type { CitybusCall, CitybusPlacesResponse, CitybusResponse, CitybusStopBoard } from "@/lib/types"
 
 const STOP_LIMIT = 6
-const PAIR_BUDGET = 24
-const FETCH_LIMIT = 4
+// The mixed view keeps 6. Only may draw more, still a slice of the 2,500-stop list.
+const SOLO_CAP = 200
 const ETA_ROOT = "https://rt.data.gov.hk/v2/transport/citybus/eta/CTB"
 
 type EtaRow = {
@@ -21,11 +19,10 @@ type EtaRow = {
   rmk_tc?: string
 }
 
-const remembered = new Map<string, HeldRows<EtaRow>>()
-
-export function loadCitybusPlaces(lng: number, lat: number): CitybusPlacesResponse {
+export function loadCitybusPlaces(lng: number, lat: number, wide = false, zoom = Number.NaN): CitybusPlacesResponse {
   const stops: CitybusPlacesResponse["stops"] = []
-  for (const stop of nearestCitybusStops(lng, lat, STOP_LIMIT)) {
+  const found = wide ? citybusStopsSpread(lng, lat, kmbReachMetres(zoom, lat), SOLO_CAP) : nearestCitybusStops(lng, lat, STOP_LIMIT)
+  for (const stop of found) {
     const record = citybusStop(stop.id)
     if (!record) continue
     stops.push({
@@ -40,52 +37,28 @@ export function loadCitybusPlaces(lng: number, lat: number): CitybusPlacesRespon
   return { ok: true, stops }
 }
 
-// Poles and the routes on them come from the network file. This only refreshes arrival times.
-export async function loadCitybusNear(lng: number, lat: number, now = Date.now()): Promise<CitybusResponse> {
-  forgetStale(remembered, now)
-  const nearest = nearestCitybusStops(lng, lat, STOP_LIMIT)
-  const pairs = arrivalPairs(nearest, PAIR_BUDGET)
-  const turn = await takeEtaTurn(async () => {
-    let missed = 0
-    await pool(pairs, FETCH_LIMIT, async (pair) => {
-      const key = `${pair.stopId}/${pair.route}`
-      const cached = remembered.get(key)
-      if (!etaDue(cached, now)) return
-      const rows = await fetchEta(pair.stopId, pair.route)
-      if (rows) remembered.set(key, { at: now, rows })
-      else missed += 1
-    })
-    return missed
-  })
-  const missed = turn ?? 0
-
-  const stops: CitybusStopBoard[] = []
-  for (const stop of nearest) {
-    const record = citybusStop(stop.id)
-    if (!record) continue
-    const rows: EtaRow[] = []
-    for (const route of stop.routes) {
-      const kept = heldRows(remembered.get(`${stop.id}/${route}`), now)
-      if (kept) rows.push(...kept)
-    }
-    stops.push({
-      id: stop.id,
-      nameTc: record.tc,
-      nameEn: record.en,
-      lng: record.lng,
-      lat: record.lat,
-      routes: record.routes,
-      calls: callsAt(rows, now),
-    })
-  }
-  const error = arrivalFailure(missed, stops.map((stop) => stop.calls.length), "Citybus arrivals failed")
+export async function loadCitybusNear(lng: number, lat: number): Promise<CitybusResponse> {
+  const places = loadCitybusPlaces(lng, lat)
   return {
-    ok: true,
-    ...(error ? { error } : {}),
-    observedAt: new Date(now).toISOString(),
-    stops,
-    cacheable: turn !== null && missed === 0,
+    ok: places.ok,
+    observedAt: null,
+    stops: places.stops.map((stop) => ({ ...stop, calls: [], clock: "waiting" as const })),
+    cacheable: true,
   }
+}
+
+export function loadCitybusBoard(id: string, now = Date.now()): Promise<{ ok: true; stop: CitybusStopBoard } | { ok: false }> {
+  return loadPoleBoard(`citybus:${id}`, now, {
+    poleIds: () => citybusPoleIds(id),
+    pole: (stopId) => {
+      const record = citybusStop(stopId)
+      if (!record) return null
+      return { tc: record.tc, en: record.en, lng: record.lng, lat: record.lat, routes: record.routes }
+    },
+    jobs: (_stopId, record) => record.routes,
+    rows: (stopId, route) => fetchEta(stopId, route),
+    calls: (_stopId, _route, rows, at) => callsAt(rows, at),
+  })
 }
 
 function callsAt(rows: EtaRow[], now: number): CitybusCall[] {
@@ -110,7 +83,7 @@ function callsAt(rows: EtaRow[], now: number): CitybusCall[] {
     })
   }
   calls.sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999) || a.route.localeCompare(b.route, undefined, { numeric: true }))
-  return calls.slice(0, 12)
+  return calls
 }
 
 function isScheduled(row: EtaRow): boolean {
@@ -122,18 +95,7 @@ function text(value: unknown): string {
 }
 
 async function fetchEta(stopId: string, route: string): Promise<EtaRow[] | null> {
-  try {
-    const response = await etaQueue(() => fetchUpstream(`${ETA_ROOT}/${encodeURIComponent(stopId)}/${encodeURIComponent(route)}`, ETA_FRESH_MS, {
-      timeoutMs: 5_000,
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
-      },
-    }))
-    if (response.status !== 200) return null
-    const body = JSON.parse(new TextDecoder().decode(response.body)) as { data?: EtaRow[] }
-    return Array.isArray(body.data) ? body.data : []
-  } catch {
-    return null
-  }
+  const body = await readEtaJson<{ data?: EtaRow[] }>(`${ETA_ROOT}/${encodeURIComponent(stopId)}/${encodeURIComponent(route)}`)
+  if (!body) return null
+  return Array.isArray(body.data) ? body.data : []
 }

@@ -133,10 +133,10 @@
 
 @keyframes intel-marquee {
   from {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0.01px);
   }
   to {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0.01px);
   }
 }
 
@@ -144,14 +144,51 @@
   animation-name: intel-marquee;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
+  transform: translate3d(0, 0, 0.01px);
+  backface-visibility: hidden;
+  will-change: transform;
 }
 
-.intel-marquee:hover {
-  animation-play-state: paused;
+@media (hover: hover) and (pointer: fine) {
+  .intel-marquee:hover {
+    animation-play-state: paused;
+  }
 }
 
 #harbour-intel {
   view-transition-name: harbour-intel;
+}
+
+.intel-strip {
+  display: flex;
+}
+
+@media (max-width: 639px) {
+  #harbour-intel:not([data-intel-open="true"]) {
+    left: 0;
+    right: 0;
+    width: auto;
+    bottom: var(--marquee-bottom, 3.5rem);
+    border-width: 1px 0 0;
+  }
+
+  #harbour-intel:not([data-intel-open="true"]) .intel-strip-fold,
+  #harbour-intel:not([data-intel-open="true"]) .intel-strip-fold .fold-clip {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: none;
+  }
+
+  #harbour-intel:not([data-intel-open="true"]) .intel-panel-fold,
+  #harbour-intel:not([data-intel-open="true"]) .intel-panel-fold .fold-clip {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: none;
+  }
 }
 
 .maplibregl-map .maplibregl-ctrl-top-left {
@@ -211,6 +248,121 @@
 
 .bar-scroll::-webkit-scrollbar {
   display: none;
+}
+
+.layer-names {
+  display: contents;
+}
+
+.fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    grid-template-columns 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 200ms ease;
+}
+
+.fold-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.fold-across {
+  grid-template-rows: auto;
+  grid-template-columns: 0fr;
+}
+
+.fold-across.fold-open {
+  grid-template-columns: 1fr;
+}
+
+.fold:not(.fold-open) {
+  pointer-events: none;
+}
+
+.fold-clip {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s linear 280ms;
+}
+
+.fold-open .fold-clip {
+  visibility: visible;
+  overflow: visible;
+  transition: visibility 0s linear 0s;
+}
+
+@starting-style {
+  .fold-open {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  .fold-across.fold-open {
+    grid-template-columns: 0fr;
+  }
+}
+
+.fold-mark {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid currentColor;
+  border-left: 4px solid transparent;
+  transform: rotate(0deg);
+  transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.fold-mark-open {
+  transform: rotate(180deg);
+}
+
+.layer-dock[data-layers-open="false"] .fold {
+  grid-template-rows: 0fr;
+  grid-template-columns: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .layer-dock:not([data-layers-open="true"]) .fold {
+    grid-template-rows: 0fr;
+    grid-template-columns: 0fr;
+    opacity: 0;
+    pointer-events: none;
+    transition: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .bar-fold,
+  .bar-fold .fold-clip {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+.layer-scroll {
+  scrollbar-width: none;
+  padding-bottom: 0.7rem;
+}
+
+.layer-scroll::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}
+
+@media (min-width: 640px) {
+  .layer-scroll {
+    padding-bottom: 0;
+  }
 }
 
 @media (max-width: 760px) {
@@ -388,9 +540,13 @@ html[data-locale="zh-CN"] .city-card {
   display: flex;
   flex-direction: column;
   max-height: min(42vh, 280px);
-  overflow: auto;
-  padding-inline-end: 2px;
-  scrollbar-color: rgb(16 32 51 / 45%) transparent;
+  margin-inline-end: -8px;
+  margin-bottom: -4px;
+  padding-inline-end: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgb(16 32 51 / 40%) transparent;
 }
 
 .city-card-board::-webkit-scrollbar {
@@ -535,6 +691,11 @@ html[data-locale^="zh-"] .uppercase {
 @media (prefers-reduced-motion: reduce) {
   .hud-pulse {
     animation: none;
+  }
+  .fold,
+  .fold-mark,
+  .fold-clip {
+    transition: none;
   }
   ::view-transition-group(harbour-intel) {
     animation-duration: 0s;

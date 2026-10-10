@@ -1,4 +1,4 @@
-import { openFeedCache } from "@/lib/feed-cache"
+import { openFeedCache } from "./feed-cache.ts"
 
 type UpstreamBody = { status: number; body: ArrayBuffer; contentType: string }
 
@@ -24,7 +24,6 @@ async function readThrough(url: string, ttlMs: number, options: UpstreamOptions)
   const shared = await readShared(url, ttlMs)
   if (shared) return shared
 
-  // One cache only. fetch() with cacheTtl and cache.put of the same URL wait on
   // each other, and the request never produces a response.
   const response = await rawFetch()(url, {
     signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),

@@ -32,3 +32,14 @@ export function formatSpeed(speedKmh: number | null): string {
   if (speedKmh == null || Number.isNaN(speedKmh)) return "—"
   return `${Math.round(speedKmh)} km/h`
 }
+
+export const SPEED_FRESH_MS = 60_000
+export const SPEED_RETRY_MS = 5_000
+
+export function speedReadingTtl(complete: boolean): number {
+  return complete ? SPEED_FRESH_MS : SPEED_RETRY_MS
+}
+
+export function speedReadingComplete(drawn: boolean, lampposts: boolean, lamppostSpeeds: boolean, saturation: boolean): boolean {
+  return drawn && lampposts && lamppostSpeeds && saturation
+}

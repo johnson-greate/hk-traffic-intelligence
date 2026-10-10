@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { arrivalFailure, etaDue, forgetStale, heldRows, mergePlaceArrivals, ETA_FRESH_MS, ETA_KEEP_MS } from "./place-arrivals.ts"
+import { catalogueBoards, etaDue, forgetStale, heldRows, ETA_FRESH_MS, ETA_KEEP_MS } from "./place-arrivals.ts"
 import { readStopList } from "./stop-list.ts"
 
 const now = 1_700_000_000_000
@@ -19,10 +19,6 @@ const memory = new Map<string, { at: number; rows: string[] }>([
 forgetStale(memory, now)
 assert.deepEqual([...memory.keys()], ["fresh"])
 
-assert.equal(arrivalFailure(0, [0, 0], "failed"), undefined)
-assert.equal(arrivalFailure(2, [0, 1], "failed"), undefined)
-assert.equal(arrivalFailure(2, [0, 0], "failed"), "failed")
-
 const places = {
   ok: true,
   stops: [
@@ -30,19 +26,13 @@ const places = {
     { id: "garden", nameTc: "河畔花園", nameEn: "Garden Rivera", lng: 114.195, lat: 22.382 },
   ],
 }
-const arrivals = {
-  ok: true,
-  observedAt: "2026-10-03T00:00:00.000Z",
-  stops: [{ id: "hotel", nameTc: "elsewhere", nameEn: "elsewhere", lng: 0, lat: 0, calls: [{ route: "85K" }] }],
-}
-const merged = mergePlaceArrivals(places, arrivals)
-assert.equal(merged?.stops.length, 2)
-assert.equal(merged?.stops[0]?.lng, 114.196)
-assert.deepEqual(merged?.stops[0]?.calls, [{ route: "85K" }])
-assert.deepEqual(merged?.stops[1]?.calls, [])
-assert.equal(mergePlaceArrivals(places, null)?.stops[1]?.id, "garden")
-assert.equal(mergePlaceArrivals(null, arrivals)?.stops.length, 1)
-assert.equal(mergePlaceArrivals(null, { ok: false, observedAt: null, stops: [] }), null)
+
+const listedPins = catalogueBoards(places)
+assert.equal(listedPins?.stops.length, 2)
+assert.deepEqual(listedPins?.stops[0]?.calls, [])
+assert.equal(listedPins?.stops[0]?.clock, "waiting")
+assert.equal(listedPins?.stops[0]?.lng, 114.196)
+assert.equal(catalogueBoards(null), null)
 
 const listed = readStopList({
   data: [
