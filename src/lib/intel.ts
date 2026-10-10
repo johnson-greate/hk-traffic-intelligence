@@ -1,3 +1,4 @@
+import { boardFailedCopy, type BoardFault } from "./board-status.ts"
 import { warnedCrossings } from "./crossings.ts"
 import { controlName, displayText, hallStatus, hallSummary, vehicleSentence, type Messages } from "./i18n.ts"
 import type { ApproachPoint, Corridor, TrafficResponse, WeatherConditions, WeatherWarning } from "./types.ts"
@@ -43,8 +44,10 @@ export type IntelInput = {
   citybusError: string | null
   gmbError: string | null
   nlbError: string | null
+  mtrBusError: string | null
   ferryError: string | null
   mapError: string | null
+  boardFaults?: readonly BoardFault[]
 }
 
 const RANKED_LIMIT = 12
@@ -64,7 +67,7 @@ export function intelBoard(input: IntelInput, m: Messages): Record<IntelTab, Int
     roads: [...faults.filter((item) => item.id === "fault-speed" || item.id === "fault-incidents"), ...incidents, ...jams, ...works].sort(byScore).slice(0, 16),
     boundary: boundaryOf(input, m),
     weather: weatherOf(input, warnings, m),
-    systems: [...faults].sort(byScore),
+    systems: [...faults, ...boardFaultItems(input.boardFaults ?? [], m)].sort(byScore),
     notes: [],
   }
 }
@@ -85,11 +88,12 @@ function faultsOf(input: IntelInput, m: Messages): IntelItem[] {
   const feeds: { id: string; score: number; title: string; detail: string | null }[] = [
     { id: "fault-picture", score: 420_000, title: m.pictureFailed, detail: input.pictureError },
     { id: "fault-mtr", score: 400_000, title: m.mtrFailed, detail: input.mtrError },
-    { id: "fault-kmb", score: 390_000, title: m.kmbFailed, detail: input.kmbError },
+    { id: "fault-kmb", score: 390_000, title: m.kmbStopsFailed, detail: input.kmbError },
     { id: "fault-lrt", score: 380_000, title: m.lrtFailed, detail: input.lrtError },
-    { id: "fault-citybus", score: 370_000, title: m.citybusFailed, detail: input.citybusError },
-    { id: "fault-gmb", score: 360_000, title: m.gmbFailed, detail: input.gmbError },
-    { id: "fault-nlb", score: 350_000, title: m.nlbFailed, detail: input.nlbError },
+    { id: "fault-citybus", score: 370_000, title: m.citybusStopsFailed, detail: input.citybusError },
+    { id: "fault-gmb", score: 360_000, title: m.gmbStopsFailed, detail: input.gmbError },
+    { id: "fault-nlb", score: 350_000, title: m.nlbStopsFailed, detail: input.nlbError },
+    { id: "fault-mtrbus", score: 345_000, title: m.mtrBusStopsFailed, detail: input.mtrBusError },
     { id: "fault-ferry", score: 340_000, title: m.ferryFailed, detail: input.ferryError },
     { id: "fault-map", score: 1_200_000, title: m.mapFailed, detail: input.mapError },
   ]
@@ -97,6 +101,10 @@ function faultsOf(input: IntelInput, m: Messages): IntelItem[] {
     if (feed.detail) items.push(fault(feed.id, feed.score, feed.title, feed.detail, m))
   }
   return items
+}
+
+function boardFaultItems(faults: readonly BoardFault[], m: Messages): IntelItem[] {
+  return faults.map((item) => fault(`fault-board-${item.operator}-${item.id}`, 360_000, boardFailedCopy(item.operator, m), item.name, m))
 }
 
 function fault(id: string, score: number, title: string, detail: string, m: Messages): IntelItem {
@@ -142,6 +150,7 @@ function controlPointsOf(collection: GeoJSON.FeatureCollection | null, limit: nu
   if (!collection) return []
   const rows = collection.features.flatMap((feature) => {
     const worst = numberProp(feature.properties, "worst")
+    if (hallClosed(worst)) return []
     const vehicleBand = textProp(feature.properties, "vehicleBand")
     const passengerHot = worst === 1 || worst === 2
     const vehicleHot = vehicleBand === "congested" || vehicleBand === "slow"
@@ -152,6 +161,10 @@ function controlPointsOf(collection: GeoJSON.FeatureCollection | null, limit: nu
   return rows.slice(0, limit)
 }
 
+export function firstOpenBoundary(items: readonly IntelItem[]): IntelItem | undefined {
+  return items.find((item) => item.kind === "control" && item.coordinates && !hallClosedScore(item.score))
+}
+
 function boundaryOf(input: IntelInput, m: Messages): IntelItem[] {
   if (input.controlError) return [fault("fault-boundary", 580_000, m.faultBoundary, input.controlError, m)]
   if (!input.controlPoints) return []
@@ -160,12 +173,32 @@ function boundaryOf(input: IntelInput, m: Messages): IntelItem[] {
     .sort(byScore)
 }
 
+const CLOSED_HALL = 500
+
+function hallClosed(worst: number | null): boolean {
+  return worst === 99 || worst === 4
+}
+
+function hallClosedScore(score: number): boolean {
+  return score === CLOSED_HALL
+}
+
 function controlItem(feature: GeoJSON.Feature, worst: number | null, vehicleBand: string, m: Messages): IntelItem {
   const code = textProp(feature.properties, "code")
   const name = controlTitle(feature, m)
-  const veryBusy = worst === 2 || vehicleBand === "congested"
-  const score =
-    worst === 2 ? 750_000 : vehicleBand === "congested" ? 420_000 : worst === 1 ? 230_000 : worst === 99 || worst === 4 ? 180_000 : vehicleBand === "slow" ? 60_000 : 1_000
+  const closed = hallClosed(worst)
+  const veryBusy = !closed && (worst === 2 || vehicleBand === "congested")
+  const score = closed
+    ? CLOSED_HALL
+    : worst === 2
+      ? 750_000
+      : vehicleBand === "congested"
+        ? 420_000
+        : worst === 1
+          ? 230_000
+          : vehicleBand === "slow"
+            ? 60_000
+            : 1_000
   return {
     id: `control-${code || name}`,
     kind: "control",
@@ -174,7 +207,7 @@ function controlItem(feature: GeoJSON.Feature, worst: number | null, vehicleBand
     label: hallStatus(worst, vehicleBand, m),
     title: name,
     detail: controlDetail(feature, m),
-    tone: veryBusy ? "red" : worst === 1 || worst === 99 || worst === 4 || vehicleBand === "slow" ? "amber" : "green",
+    tone: veryBusy ? "red" : worst === 1 || closed || vehicleBand === "slow" ? "amber" : "green",
     coordinates: pointOf(feature),
   }
 }
@@ -197,6 +230,7 @@ function controlDetail(feature: GeoJSON.Feature, m: Messages): string {
     ] as const
   ).flatMap(([name, code]): [string, number][] => (code == null ? [] : [[name, code]]))
   const summary = rows.length > 0 ? hallSummary(rows, m) : ""
+  if (hallClosed(numberProp(properties, "worst"))) return summary
   const road = displayText(m.locale, textProp(properties, "vehicleRoadTc"), textProp(properties, "vehicleRoadEn"))
   const vehicle = vehicleSentence(road, numberProp(properties, "vehicleKmh"), textProp(properties, "vehicleBand"), m)
   return [summary, vehicle].filter(Boolean).join(" · ")

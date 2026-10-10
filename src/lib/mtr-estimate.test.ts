@@ -12,7 +12,8 @@ import {
   type EstimatedTrain,
   type TrainObservation,
 } from "./mtr-estimate.ts"
-import { advanceRuns, mergeRuns, type TrainRun } from "./mtr-run.ts"
+import { advanceRuns, mergeRuns, runCollection, runsFromTrains, type TrainRun } from "./mtr-run.ts"
+import { useTrackEdges } from "./rail-tracks.ts"
 
 const now = Date.parse("2026-10-01T05:40:00Z")
 
@@ -149,6 +150,54 @@ const far = mergeRuns([sampleRun(100, 12)], [{ ...sampleRun(3000, 12), id: "othe
 assert.equal(far.find((run) => run.id === "keep")?.distance, 100)
 assert.equal(far.some((run) => run.id === "other"), true)
 
+const stillBehind = mergeRuns([sampleRun(800, 12)], [sampleRun(200, 12)], now + 1000, locate)
+assert.equal(stillBehind.find((run) => run.id === "keep")?.distance, 800)
+
+const piledRuns = mergeRuns(
+  [sampleRun(1440, 12), { ...sampleRun(1440, 12), id: "second" }],
+  [sampleRun(720, 12), { ...sampleRun(0, 12), id: "back" }],
+  now + 1000,
+  locate,
+)
+const piledGap = Math.abs((piledRuns[0]?.distance ?? 0) - (piledRuns[1]?.distance ?? 0))
+assert.ok(piledGap > 400, `piled runs stayed ${piledGap}m apart`)
+
+const branchClock = estimateTrains(
+  eastRail,
+  [obs("SHS", "ADM", 1, 1, "EAL"), obs("SHS", "ADM", 8, 8, "EAL")],
+  locate,
+)
+assert.equal(branchClock.length, 2)
+const soonSpot = projectTrain(branchClock.find((train) => train.ttnt === 1)!, locate, now)
+const lateSpot = projectTrain(branchClock.find((train) => train.ttnt === 8)!, locate, now)
+assert.ok(soonSpot && lateSpot)
+const branchGap = metresBetween(soonSpot, lateSpot)
+assert.ok(branchGap > 400, `branch clocks stayed ${branchGap.toFixed(0)}m apart`)
+assert.ok(metresBetween(soonSpot, places.SHS!) < metresBetween(lateSpot, places.SHS!))
+
+const onPlatform = estimateTrains(line, [obs("A", "C", 0, 0), obs("A", "C", 3, 3)], locate)
+assert.equal(onPlatform.length, 1)
+assert.equal(onPlatform[0]!.ttnt, 0)
+
+place("HOK", 0)
+place("KOW", 2335)
+place("TUC", 5000)
+place("AWE", 8000)
+const sharedCorridor = [
+  { id: "TCL-UT", line: "TCL", stations: ["HOK", "KOW", "TUC"] },
+  { id: "AEL-UT", line: "AEL", stations: ["HOK", "KOW", "AWE"] },
+]
+const stackedLines = estimateTrains(
+  sharedCorridor,
+  [obs("HOK", "TUC", 0, 0, "TCL"), obs("HOK", "AWE", 8, 8, "AEL")],
+  locate,
+)
+assert.equal(stackedLines.length, 1)
+assert.equal(stackedLines[0]!.line, "TCL")
+assert.equal(stackedLines[0]!.ttnt, 0)
+const airportAlone = estimateTrains(sharedCorridor, [obs("HOK", "AWE", 8, 8, "AEL")], locate)
+assert.equal(airportAlone.length, 1)
+
 const carried = carryArrivalClock(
   [{ ...obs("B", "C", 0, 0), observedAt: now - 60_000, dueAt: now - 60_000 }],
   [obs("B", "C", 0, 0)],
@@ -187,7 +236,93 @@ assert.deepEqual(pathsToward(shaTin, "EAL", "RAC"), [
 const segment = segmentMinutes(metresBetween(places.A!, places.B!))
 assert.ok(Math.abs(segment - 2) < 0.05)
 
+const sameWay = runCollection([
+  spotRun("lead", 1400),
+  spotRun("rear", 0),
+  spotRun("mid", 30),
+  { ...spotRun("other", 0), dest: "A" },
+], locate)
+assert.equal(sameWay.features.length, 3)
+assert.deepEqual(sameWay.features.map((feature) => feature.properties?.id).sort(), ["lead", "mid", "other"])
+
+places.H1 = { lng: 114, lat: latNorth(0) }
+places.H2 = { lng: 114, lat: latNorth(800) }
+places.H3 = { lng: 114, lat: latNorth(30) }
+const bend = runCollection([
+  { ...spotRun("out", 20), path: ["H1", "H2", "H3"], dest: "H3" },
+  { ...spotRun("back", 1540), path: ["H1", "H2", "H3"], dest: "H3" },
+], locate)
+assert.equal(bend.features.length, 2)
+
+const railBend = [
+  [places.A!.lng, places.A!.lat],
+  [places.A!.lng + 0.008, ((places.A!.lat ?? 0) + (places.B!.lat ?? 0)) / 2],
+  [places.B!.lng, places.B!.lat],
+]
+useTrackEdges({ "A>B": railBend })
+const onBend = projectTrain({ ...obsTrain("B", "C", 1), path: ["A", "B", "C"], hold: ["A", "B", "C"] }, locate, now)
+assert.ok(onBend)
+assert.equal(onBend.from, "A")
+assert.equal(onBend.to, "B")
+assert.ok(onBend.lng > places.A!.lng + 0.001)
+useTrackEdges({})
+
+const first = asFeed(estimateTrains(line, [obs("C", "C", 80, 80)], locate))
+let parked = runsFromTrains(first, locate, () => "#111", now)
+assert.equal(parked.length, 1)
+assert.equal(parked[0]?.speed, 0)
+assert.equal(parked[0]?.distance, 0)
+assert.equal(parked[0]?.plat, "")
+assert.equal(parked[0]?.clamp, "origin")
+for (let second = 1; second <= 70; second += 1) {
+  parked = advanceRuns(parked, 1, locate)
+  if (second % 15 === 0) {
+    const again = runsFromTrains(first, locate, () => "#111", now + second * 1000)
+    parked = mergeRuns(parked, again, now + second * 1000, locate)
+  }
+}
+assert.equal(parked[0]?.distance, 0)
+assert.equal(parked[0]?.speed, 0)
+const parkedDot = runCollection(parked, locate).features[0]
+assert.equal(parkedDot?.properties?.standing, "Y")
+assert.equal(parkedDot?.properties?.from, "A")
+assert.equal(parkedDot?.properties?.to, "A")
+assert.equal(parkedDot?.properties?.next, "B")
+assert.equal(parkedDot?.properties?.clamp, "origin")
+const parkedMinutes = Number(parkedDot?.properties?.minutes)
+assert.ok(parkedMinutes >= 78 && parkedMinutes <= 80, `parked minutes ${parkedMinutes}`)
+assert.equal(parkedDot?.geometry && parkedDot.geometry.type === "Point" ? parkedDot.geometry.coordinates[1] : null, places.A?.lat)
+
+const waitingHere = asFeed(estimateTrains(line, [obs("A", "C", 80, 80)], locate))
+const posted = runsFromTrains(waitingHere, locate, () => "#111", now)
+assert.equal(posted[0]?.plat, "1")
+assert.equal(posted[0]?.clamp, "origin")
+
+const drifted = mergeRuns([{ ...(parked[0] ?? sampleRun(800, 12)), distance: 800, speed: 12 }], posted, now + 1000, locate)
+assert.equal(drifted[0]?.distance, 0)
+assert.equal(drifted[0]?.speed, 0)
+
+const service = asFeed(estimateTrains(line, [obs("B", "C", 1, 1), obs("C", "C", 3, 3)], locate))
+const rolling = runsFromTrains(service, locate, () => "#111", now)
+const leaving = mergeRuns(posted, rolling, now + 1000, locate)
+assert.equal(leaving.length, 1)
+assert.ok((leaving[0]?.speed ?? 0) > 0)
+assert.equal(leaving[0]?.distance, rolling[0]?.distance)
+assert.equal(leaving[0]?.id, posted[0]?.id)
+
+assert.ok((rolling[0]?.speed ?? 0) > 3)
+const before = rolling[0]?.distance ?? 0
+const moved = advanceRuns(rolling, 5, locate)
+assert.ok((moved[0]?.distance ?? 0) > before + 20)
+const rollingDot = runCollection(moved, locate).features[0]
+assert.equal(rollingDot?.properties?.standing, "N")
+assert.notEqual(rollingDot?.properties?.from, rollingDot?.properties?.to)
+
 console.log("mtr estimate ok")
+
+function asFeed(trains: EstimatedTrain[]) {
+  return trains.map((train) => ({ ...train, observedAt: new Date(train.observedAt).toISOString() }))
+}
 
 function sampleRun(distance: number, speed: number): TrainRun {
   return {
@@ -203,6 +338,8 @@ function sampleRun(distance: number, speed: number): TrainRun {
     delay: false,
     timeType: "A",
     seenAt: now,
+    wait: null,
+    clamp: "none",
   }
 }
 
@@ -245,6 +382,25 @@ function obs(
 
 function routes(lineCode: string, legs: [string, string[]][]): EstimateRoute[] {
   return legs.map(([direction, stations]) => ({ id: `${lineCode}-${direction}`, line: lineCode, stations }))
+}
+
+function spotRun(id: string, distance: number): TrainRun {
+  return {
+    id,
+    line: "TCL",
+    dest: "C",
+    path: ["A", "B", "C"],
+    distance,
+    speed: 12,
+    cruise: 12,
+    color: "#f80",
+    plat: "1",
+    delay: false,
+    timeType: "A",
+    seenAt: now,
+    wait: null,
+    clamp: "none",
+  }
 }
 
 function place(code: string, metresNorth: number) {

@@ -143,6 +143,11 @@ export type Messages = {
   tolls: string
   incidentsLayer: string
   replay: string
+  locate: string
+  layerOnly: string
+  layerAll: string
+  layerNames: string
+  layerHide: string
   basemap: string
   speedKey: string
   pictureFailed: string
@@ -187,29 +192,73 @@ export type Messages = {
   kmbLwb: string
   lwb: string
   kmbFailed: string
+  kmbStopsFailed: string
   kmbScheduled: string
   kmbNone: string
+  boardLoading: string
   lrt: string
   lrtFailed: string
   lrtNone: string
   lrtArriving: string
   citybus: string
   citybusFailed: string
+  citybusStopsFailed: string
   citybusNone: string
   gmb: string
   gmbFailed: string
+  gmbStopsFailed: string
   gmbNone: string
   nlb: string
   nlbFailed: string
+  nlbStopsFailed: string
   nlbNone: string
+  mtrBus: string
+  mtrBusFailed: string
+  mtrBusStopsFailed: string
+  mtrBusNone: string
   ferry: string
   ferryFailed: string
   ferryNone: string
+  parking: string
+  parkingFailed: string
+  motorcycleFailed: string
+  kerb: string
+  kerbFailed: string
+  kerbBays: (n: number) => string
+  parkingNone: string
+  parkingUnpublished: string
+  parkingClosed: string
+  parkingEv: string
+  parkingPrivate: string
+  parkingLgv: string
+  parkingHgv: string
+  parkingMotorcycle: string
+  parkingSpaces: (n: number) => string
+  plateFree: string
+  parkingAsOf: (count: string, time: string) => string
+  parkingHeight: (n: number) => string
+  meter: string
+  meterFailed: string
+  meterGeneral: string
+  meterGoods: string
+  meterCoach: string
+  meterVacant: string
+  meterTaken: string
+  meterClosed: string
+  meterSince: (state: string, time: string) => string
+  charger: string
+  chargerFailed: string
+  chargerStandard: string
+  chargerMedium: string
+  chargerQuick: string
+  chargerFast: string
+  chargerPlugs: (n: number) => string
+  chargerList: string
 }
 
 const en: Messages = {
   locale: "en",
-  documentTitle: "Traffic Intelligence · Hong Kong",
+  documentTitle: "香港智慧城市交通情報網 by Keith Li",
   productMark: "Hong Kong",
   productName: "Traffic Intelligence",
   live: "Live",
@@ -319,6 +368,11 @@ const en: Messages = {
   tolls: "Tolls",
   incidentsLayer: "Incidents",
   replay: "Replay",
+  locate: "My location",
+  layerOnly: "Only",
+  layerAll: "All",
+  layerNames: "Layers",
+  layerHide: "Hide",
   basemap: "Basemap",
   speedKey: "Official traffic class. Good, average, and bad are the Transport Department saturation levels.",
   pictureFailed: "The camera and works picture did not load.",
@@ -363,29 +417,73 @@ const en: Messages = {
   kmbLwb: "KMB / LWB",
   lwb: "LWB",
   kmbFailed: "KMB arrivals did not load.",
+  kmbStopsFailed: "KMB stops did not load.",
   kmbScheduled: "Scheduled",
   kmbNone: "No arrival on the board",
+  boardLoading: "Reading the published times.",
   lrt: "Light Rail",
   lrtFailed: "Light Rail arrivals did not load.",
   lrtNone: "No arrival on the board",
   lrtArriving: "Arriving",
   citybus: "Citybus",
   citybusFailed: "Citybus arrivals did not load.",
+  citybusStopsFailed: "Citybus stops did not load.",
   citybusNone: "No arrival on the board",
   gmb: "Green minibus",
   gmbFailed: "Green minibus arrivals did not load.",
+  gmbStopsFailed: "Green minibus stops did not load.",
   gmbNone: "No arrival on the board",
   nlb: "New Lantao Bus",
   nlbFailed: "New Lantao Bus arrivals did not load.",
+  nlbStopsFailed: "New Lantao Bus stops did not load.",
   nlbNone: "No arrival on the board",
+  mtrBus: "MTR Bus",
+  mtrBusFailed: "MTR bus arrivals did not load.",
+  mtrBusStopsFailed: "MTR bus stops did not load.",
+  mtrBusNone: "No arrival on the board",
   ferry: "Ferry",
   ferryFailed: "Ferry arrivals did not load.",
   ferryNone: "No sailing on the board",
+  parking: "Car parks",
+  parkingFailed: "Car parks did not load.",
+  motorcycleFailed: "Motorcycle parks did not load.",
+  kerb: "Motorcycle bays",
+  kerbFailed: "Motorcycle bays did not load.",
+  kerbBays: (n) => `${n} bays`,
+  parkingNone: "No published spaces",
+  parkingUnpublished: "No count published",
+  parkingClosed: "Closed",
+  parkingEv: "EV spaces",
+  parkingPrivate: "Private car",
+  parkingLgv: "Light goods",
+  parkingHgv: "Heavy goods",
+  parkingMotorcycle: "Motorcycle",
+  parkingSpaces: (n) => `${n} ${n === 1 ? "space" : "spaces"}`,
+  plateFree: "free",
+  parkingAsOf: (count, time) => `${count} at ${time}`,
+  parkingHeight: (n) => `Height limit ${n} m`,
+  meter: "Meters",
+  meterFailed: "Meters did not load.",
+  meterGeneral: "Private car / light van",
+  meterGoods: "Goods vehicle",
+  meterCoach: "Coach",
+  meterVacant: "Vacant",
+  meterTaken: "Occupied",
+  meterClosed: "Not in use",
+  meterSince: (state, time) => `${state} since ${time}`,
+  charger: "Chargers",
+  chargerFailed: "Chargers did not load.",
+  chargerStandard: "Standard",
+  chargerMedium: "Medium",
+  chargerQuick: "Quick",
+  chargerFast: "Fast",
+  chargerPlugs: (n) => `${n} plugs`,
+  chargerList: "June 2026 list",
 }
 
 const zhHK: Messages = {
   locale: "zh-HK",
-  documentTitle: "交通情報 · 香港",
+  documentTitle: "香港智慧城市交通情報網 by Keith Li",
   productMark: "香港",
   productName: "交通情報",
   live: "實時",
@@ -495,6 +593,11 @@ const zhHK: Messages = {
   tolls: "隧道",
   incidentsLayer: "事故",
   replay: "重播",
+  locate: "我的位置",
+  layerOnly: "只看",
+  layerAll: "全部",
+  layerNames: "圖層",
+  layerHide: "收起",
   basemap: "底圖",
   speedKey: "運輸署交通狀況等級：暢順、緩慢、擠塞。",
   pictureFailed: "未能載入快拍及工程畫面。",
@@ -539,30 +642,74 @@ const zhHK: Messages = {
   kmbLwb: "九巴／龍運",
   lwb: "龍運",
   kmbFailed: "未能取得九巴到站時間。",
+  kmbStopsFailed: "未能載入九巴車站。",
   kmbScheduled: "原定班次",
   kmbNone: "班次表沒有到站時間",
+  boardLoading: "正在讀取已公布的到站時間。",
   lrt: "輕鐵",
   lrtFailed: "未能取得輕鐵到站時間。",
   lrtNone: "班次表沒有到站時間",
   lrtArriving: "即將抵達",
   citybus: "城巴",
   citybusFailed: "未能取得城巴到站時間。",
+  citybusStopsFailed: "未能載入城巴車站。",
   citybusNone: "班次表沒有到站時間",
   gmb: "綠色專線小巴",
   gmbFailed: "未能取得綠色專線小巴到站時間。",
+  gmbStopsFailed: "未能載入綠色專線小巴車站。",
   gmbNone: "班次表沒有到站時間",
   nlb: "嶼巴",
   nlbFailed: "未能取得嶼巴到站時間。",
+  nlbStopsFailed: "未能載入嶼巴車站。",
   nlbNone: "班次表沒有到站時間",
+  mtrBus: "港鐵巴士",
+  mtrBusFailed: "未能取得港鐵巴士到站時間。",
+  mtrBusStopsFailed: "未能載入港鐵巴士車站。",
+  mtrBusNone: "班次表沒有到站時間",
   ferry: "渡輪",
   ferryFailed: "未能取得渡輪航班時間。",
   ferryNone: "未有航班時間",
+  parking: "停車場",
+  parkingFailed: "未能載入停車場。",
+  motorcycleFailed: "未能載入電單車。",
+  kerb: "電單車骨位",
+  kerbFailed: "未能載入電單車骨位。",
+  kerbBays: (n) => `${n} 個位`,
+  parkingNone: "沒有公布空位",
+  parkingUnpublished: "沒有公布數目",
+  parkingClosed: "關閉",
+  parkingEv: "電動車位",
+  parkingPrivate: "私家車",
+  parkingLgv: "輕型貨車",
+  parkingHgv: "重型貨車",
+  parkingMotorcycle: "電單車",
+  parkingSpaces: (n) => `${n} 個空位`,
+  plateFree: "空位",
+  parkingAsOf: (count, time) => `${count}（${time}）`,
+  parkingHeight: (n) => `限高 ${n} 米`,
+  meter: "咪錶",
+  meterFailed: "未能載入咪錶。",
+  meterGeneral: "私家車／輕型貨車",
+  meterGoods: "貨車",
+  meterCoach: "旅遊巴",
+  meterVacant: "空置",
+  meterTaken: "佔用",
+  meterClosed: "停用",
+  meterSince: (state, time) => `自 ${time} 起${state}`,
+  charger: "充電樁",
+  chargerFailed: "未能載入充電樁。",
+  chargerStandard: "標準",
+  chargerMedium: "中速",
+  chargerQuick: "快速",
+  chargerFast: "高速",
+  chargerPlugs: (n) => `${n} 個`,
+  chargerList: "2026年6月名單",
 }
 
 const zhCN: Messages = {
   ...zhHK,
   locale: "zh-CN",
-  documentTitle: "交通情报 · 香港",
+  documentTitle: "香港智慧城市交通情报网 by Keith Li",
   productName: "交通情报",
   live: "实时",
   mapOff: "地图未显示",
@@ -667,6 +814,11 @@ const zhCN: Messages = {
   tolls: "隧道",
   incidentsLayer: "事故",
   replay: "重播",
+  locate: "我的位置",
+  layerOnly: "只看",
+  layerAll: "全部",
+  layerNames: "图层",
+  layerHide: "收起",
   basemap: "底图",
   speedKey: "运输署交通状况等级：畅顺、缓慢、挤塞。",
   pictureFailed: "未能载入快拍及工程画面。",
@@ -703,8 +855,10 @@ const zhCN: Messages = {
   mtrDeparts: (n) => `${n} 分钟后开出`,
   mtrDue: (when, platform) => (platform ? `${when} · ${platform} 号站台` : when),
   kmbFailed: "未能取得九巴到站时间。",
+  kmbStopsFailed: "未能载入九巴车站。",
   kmbScheduled: "原定班次",
   kmbNone: "班次表没有到站时间",
+  boardLoading: "正在读取已公布的到站时间。",
   kmbLwb: "九巴／龙运",
   lwb: "龙运",
   lrt: "轻铁",
@@ -713,16 +867,58 @@ const zhCN: Messages = {
   lrtArriving: "即将抵达",
   citybus: "城巴",
   citybusFailed: "未能取得城巴到站时间。",
+  citybusStopsFailed: "未能载入城巴车站。",
   citybusNone: "班次表没有到站时间",
   gmb: "绿色专线小巴",
   gmbFailed: "未能取得绿色专线小巴到站时间。",
+  gmbStopsFailed: "未能载入绿色专线小巴车站。",
   gmbNone: "班次表没有到站时间",
   nlb: "屿巴",
   nlbFailed: "未能取得屿巴到站时间。",
+  nlbStopsFailed: "未能载入屿巴车站。",
   nlbNone: "班次表没有到站时间",
+  mtrBus: "港铁巴士",
+  mtrBusFailed: "未能取得港铁巴士到站时间。",
+  mtrBusStopsFailed: "未能载入港铁巴士车站。",
+  mtrBusNone: "班次表没有到站时间",
   ferry: "渡轮",
   ferryFailed: "未能取得渡轮航班时间。",
   ferryNone: "未有航班时间",
+  parking: "停车场",
+  parkingFailed: "未能载入停车场。",
+  motorcycleFailed: "未能载入电单车。",
+  kerb: "电单车骨位",
+  kerbFailed: "未能载入电单车骨位。",
+  kerbBays: (n) => `${n} 个位`,
+  parkingNone: "没有公布空位",
+  parkingUnpublished: "没有公布数目",
+  parkingClosed: "关闭",
+  parkingEv: "电动车位",
+  parkingPrivate: "私家车",
+  parkingLgv: "轻型货车",
+  parkingHgv: "重型货车",
+  parkingMotorcycle: "电单车",
+  parkingSpaces: (n) => `${n} 个空位`,
+  plateFree: "空位",
+  parkingAsOf: (count, time) => `${count}（${time}）`,
+  parkingHeight: (n) => `限高 ${n} 米`,
+  meter: "咪表",
+  meterFailed: "未能载入咪表。",
+  meterGeneral: "私家车／轻型货车",
+  meterGoods: "货车",
+  meterCoach: "旅游巴",
+  meterVacant: "空置",
+  meterTaken: "占用",
+  meterClosed: "停用",
+  meterSince: (state, time) => `自 ${time} 起${state}`,
+  charger: "充电桩",
+  chargerFailed: "未能载入充电桩。",
+  chargerStandard: "标准",
+  chargerMedium: "中速",
+  chargerQuick: "快速",
+  chargerFast: "高速",
+  chargerPlugs: (n) => `${n} 个`,
+  chargerList: "2026年6月名单",
 }
 
 export const MESSAGES: Record<Locale, Messages> = {
@@ -791,11 +987,15 @@ const DISTRICTS: Record<string, string> = {
   Islands: "離島",
 }
 
+export function publishedSimplified(value: string): string {
+  return value.replaceAll("\u{2B6AD}", "\u9C72")
+}
+
 export function displayText(locale: Locale, traditional: string, english: string): string {
   if (locale === "en") return english || traditional
   const source = traditional || english
   if (!source) return ""
-  if (locale === "zh-CN") return simplified ? simplified(source) : source
+  if (locale === "zh-CN") return publishedSimplified(simplified ? simplified(source) : source)
   return source
 }
 
@@ -803,10 +1003,26 @@ export function controlName(locale: Locale, code: string, english: string): stri
   return CONTROL_NAMES[locale][code] || (locale === "en" ? english : displayText(locale, "", english))
 }
 
+const DISTRICT_FROM_TRADITIONAL = new Map(Object.entries(DISTRICTS).map(([english, traditional]) => [traditional, english]))
+
 export function districtName(locale: Locale, english: string): string {
   const traditional = DISTRICTS[english]
   if (!traditional) return displayText(locale, "", english)
   return displayText(locale, traditional, english)
+}
+
+export function districtFromTraditional(locale: Locale, traditional: string): string {
+  return displayText(locale, traditional, DISTRICT_FROM_TRADITIONAL.get(traditional) ?? "")
+}
+
+export function canonicalDistrict(traditional: string): string {
+  const name = traditional.trim()
+  if (DISTRICT_FROM_TRADITIONAL.has(name)) return name
+  if (name.endsWith("區")) {
+    const shorter = name.slice(0, -1)
+    if (DISTRICT_FROM_TRADITIONAL.has(shorter)) return shorter
+  }
+  return name
 }
 
 const REGIONS: Record<string, string> = {
@@ -856,11 +1072,11 @@ export function queueText(code: number, visitor: boolean, m: Messages): string {
 }
 
 export function hallStatus(worst: number | null, vehicleBand: string, m: Messages): string {
+  if (worst === 99) return m.hallClosed
+  if (worst === 4) return m.hallMaintenance
   if (worst === 2) return m.hallVeryBusy
   if (vehicleBand === "congested") return m.hallBadApproach
   if (worst === 1) return m.hallBusy
-  if (worst === 99) return m.hallClosed
-  if (worst === 4) return m.hallMaintenance
   if (vehicleBand === "slow") return m.hallSlow
   return m.hallNormal
 }
