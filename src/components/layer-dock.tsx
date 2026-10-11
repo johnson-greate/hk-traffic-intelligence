@@ -1,14 +1,19 @@
 "use client"
 
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { Fold, FoldMark } from "@/components/fold-mark"
 import { useI18n } from "@/components/locale"
 import type { Messages } from "@/lib/i18n"
+import { allLayers, allLayersOn, beginOnly, chooseWatchedLayer, layerNamesOpen } from "@/lib/preferences"
 import type { Basemap, WatchLayer, WatchLayers } from "@/lib/types"
 
 type LayerDockProps = {
   layers: WatchLayers
   basemap: Basemap
   counts: Record<WatchLayer, number | null>
-  onToggle: (layer: WatchLayer) => void
+  only: boolean
+  onOnly: (only: boolean) => void
+  onSetLayers: (layers: WatchLayers) => void
   onBasemap: (basemap: Basemap) => void
   onReplay: () => void
   mapLive: boolean
@@ -19,7 +24,13 @@ type LayerDockProps = {
   citybusError: string | null
   gmbError: string | null
   nlbError: string | null
+  mtrBusError: string | null
   ferryError: string | null
+  parkingError: string | null
+  motorcycleError: string | null
+  kerbError: string | null
+  meterError: string | null
+  chargerError: string | null
   aboveMarquee: boolean
 }
 
@@ -55,8 +66,20 @@ function layerLabel(id: WatchLayer, m: Messages): string {
       return m.gmb
     case "nlb":
       return m.nlb
+    case "mtrbus":
+      return m.mtrBus
     case "ferry":
       return m.ferry
+    case "parking":
+      return m.parking
+    case "motorcycle":
+      return m.parkingMotorcycle
+    case "kerb":
+      return m.kerb
+    case "meter":
+      return m.meter
+    case "charger":
+      return m.charger
     default: {
       const exhaustive: never = id
       return exhaustive
@@ -79,6 +102,18 @@ function basemapLabel(id: Basemap, m: Messages): string {
   }
 }
 
+const NARROW_DOCK = "(max-width: 760px)"
+
+function subscribeNarrow(onChange: () => void) {
+  const query = window.matchMedia(NARROW_DOCK)
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
+function dockIsNarrow(): boolean {
+  return window.matchMedia(NARROW_DOCK).matches
+}
+
 const BASEMAPS: Basemap[] = ["satellite", "street", "buildings"]
 const COUNTED_LAYERS: ReadonlySet<WatchLayer> = new Set(["works", "incidents"])
 const LAYERS: { id: WatchLayer; swatch: string }[] = [
@@ -94,23 +129,75 @@ const LAYERS: { id: WatchLayer; swatch: string }[] = [
   { id: "citybus", swatch: "bg-[#f6c343]" },
   { id: "gmb", swatch: "bg-[#65a30d]" },
   { id: "nlb", swatch: "bg-[#0f766e]" },
+  { id: "mtrbus", swatch: "bg-[#166534]" },
   { id: "ferry", swatch: "bg-[#0369a1]" },
+  { id: "parking", swatch: "bg-[#d97706]" },
+  { id: "motorcycle", swatch: "bg-[#7c3aed]" },
+  { id: "kerb", swatch: "bg-[#be185d]" },
+  { id: "meter", swatch: "bg-[#1d4ed8]" },
+  { id: "charger", swatch: "bg-[#0e7490]" },
 ]
 
 export function LayerDock(props: LayerDockProps) {
   const { messages: m } = useI18n()
+  const [namesChoice, setNamesChoice] = useState<boolean | null>(null)
+  const narrow = useSyncExternalStore(subscribeNarrow, dockIsNarrow, () => false)
+  const namesOpen = layerNamesOpen(narrow, namesChoice)
+  const mix = useRef<WatchLayers | null>(null)
+  useEffect(() => {
+    if (!props.only) mix.current = null
+  }, [props.only])
   if (!props.mapLive) return null
+
+  function choose(id: WatchLayer) {
+    const next = chooseWatchedLayer(props.only, props.layers, id)
+    if (!next.only) mix.current = null
+    props.onOnly(next.only)
+    props.onSetLayers(next.layers)
+  }
+
+  function showAll() {
+    mix.current = null
+    props.onOnly(false)
+    props.onSetLayers(allLayers(props.layers))
+  }
+
+  function switchOnly() {
+    if (props.only) {
+      const restored = mix.current
+      mix.current = null
+      props.onOnly(false)
+      if (restored) props.onSetLayers(restored)
+      return
+    }
+    mix.current = props.layers
+    props.onSetLayers(beginOnly(props.layers))
+    props.onOnly(true)
+  }
   return (
     <div
       data-map-chrome="bottom"
       data-layer-dock=""
-      className={`pointer-events-auto absolute left-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-2 lg:left-16 ${
+      data-layers-open={namesChoice === null ? undefined : namesChoice ? "true" : "false"}
+      className={`layer-dock pointer-events-auto absolute left-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-2 lg:left-16 ${
         props.aboveMarquee
           ? "bottom-[var(--dock-closed-bottom,9rem)] sm:bottom-28"
-          : "bottom-[var(--map-dock-bottom,7rem)] sm:bottom-14 sm:max-w-[calc(100%-24rem)] lg:max-w-[calc(100%-30rem)]"
+          : "bottom-[var(--map-dock-bottom,7rem)] sm:right-[24rem] sm:bottom-14 sm:max-w-none lg:right-[25rem]"
       }`}
     >
-      <div className="flex max-w-full items-center gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
+      <div className="layer-scroll flex max-w-full items-center gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
+      <button
+        type="button"
+        aria-expanded={namesOpen}
+        aria-controls="layer-name-list"
+        onClick={() => setNamesChoice(!namesOpen)}
+        className={`inline-flex shrink-0 items-center gap-1.5 border px-2.5 py-1.5 font-[family-name:var(--font-hud)] text-[0.72rem] tracking-[0.08em] uppercase ${
+          namesOpen ? "border-white/15 bg-[#041018]/70 text-cyan-50" : "border-cyan-200/50 bg-[#041018]/80 text-white"
+        }`}
+      >
+        {namesOpen ? m.layerHide : m.layerNames}
+        <FoldMark open={namesOpen} />
+      </button>
       <div className="inline-flex shrink-0 border border-white/15" role="group" aria-label={m.basemap}>
         {BASEMAPS.map((id) => {
           const on = props.basemap === id
@@ -129,6 +216,29 @@ export function LayerDock(props: LayerDockProps) {
           )
         })}
       </div>
+      <Fold open={namesOpen} className="w-full min-w-0">
+      <div className="flex w-full flex-wrap items-center gap-2">
+      <button
+        type="button"
+        aria-pressed={props.only}
+        onClick={switchOnly}
+        className={`layer-actions shrink-0 border px-2.5 py-1.5 font-[family-name:var(--font-hud)] text-[0.72rem] tracking-[0.08em] uppercase ${
+          props.only ? "border-cyan-200/50 bg-[#041018]/80 text-white" : "border-white/15 bg-[#041018]/70 text-cyan-50"
+        }`}
+      >
+        {m.layerOnly}
+      </button>
+      <button
+        type="button"
+        aria-pressed={!props.only && allLayersOn(props.layers)}
+        onClick={showAll}
+        className={`layer-actions shrink-0 border px-2.5 py-1.5 font-[family-name:var(--font-hud)] text-[0.72rem] tracking-[0.08em] uppercase ${
+          !props.only && allLayersOn(props.layers) ? "border-cyan-200/50 bg-[#041018]/80 text-white" : "border-white/15 bg-[#041018]/70 text-cyan-50"
+        }`}
+      >
+        {m.layerAll}
+      </button>
+      <div id="layer-name-list" className="layer-names">
       {LAYERS.map((layer) => {
         const on = props.layers[layer.id]
         const count = COUNTED_LAYERS.has(layer.id) ? props.counts[layer.id] : null
@@ -137,7 +247,7 @@ export function LayerDock(props: LayerDockProps) {
             key={layer.id}
             type="button"
             aria-pressed={on}
-            onClick={() => props.onToggle(layer.id)}
+            onClick={() => choose(layer.id)}
             className={`inline-flex shrink-0 items-center gap-2 border px-2.5 py-1.5 font-[family-name:var(--font-hud)] text-[0.72rem] tracking-[0.08em] uppercase ${
               on
                 ? "border-cyan-200/50 bg-[#041018]/80 text-white"
@@ -150,17 +260,21 @@ export function LayerDock(props: LayerDockProps) {
           </button>
         )
       })}
+      </div>
       <button
         type="button"
         onClick={props.onReplay}
-        className="shrink-0 border border-white/15 bg-[#041018]/70 px-2.5 py-1.5 font-[family-name:var(--font-hud)] text-[0.72rem] tracking-[0.08em] text-cyan-50 uppercase"
+        className="layer-actions shrink-0 border border-white/15 bg-[#041018]/70 px-2.5 py-1.5 font-[family-name:var(--font-hud)] text-[0.72rem] tracking-[0.08em] text-cyan-50 uppercase"
       >
         {m.replay}
       </button>
       </div>
+      </Fold>
+      </div>
       {props.layers.speed ? (
+        <Fold open={namesOpen}>
         <p
-          className="basis-full flex flex-wrap items-center gap-x-3 gap-y-1 font-[family-name:var(--font-hud)] text-[0.68rem] tracking-[0.06em] text-cyan-50/90 uppercase"
+          className="layer-extra basis-full flex flex-wrap items-center gap-x-3 gap-y-1 font-[family-name:var(--font-hud)] text-[0.68rem] tracking-[0.06em] text-cyan-50/90 uppercase"
           aria-label={m.speedKey}
         >
           {SPEED_KEY.map((band) => (
@@ -170,6 +284,7 @@ export function LayerDock(props: LayerDockProps) {
             </span>
           ))}
         </p>
+        </Fold>
       ) : null}
       {props.pictureError ? (
         <p className="basis-full text-xs text-red-100" role="alert">
@@ -188,17 +303,22 @@ export function LayerDock(props: LayerDockProps) {
       ) : null}
       {props.citybusError ? (
         <p className="basis-full text-xs text-red-100" role="alert">
-          {m.locale === "en" ? props.citybusError : m.citybusFailed}
+          {m.locale === "en" ? props.citybusError : m.citybusStopsFailed}
         </p>
       ) : null}
       {props.gmbError ? (
         <p className="basis-full text-xs text-red-100" role="alert">
-          {m.locale === "en" ? props.gmbError : m.gmbFailed}
+          {m.locale === "en" ? props.gmbError : m.gmbStopsFailed}
         </p>
       ) : null}
       {props.nlbError ? (
         <p className="basis-full text-xs text-red-100" role="alert">
-          {m.locale === "en" ? props.nlbError : m.nlbFailed}
+          {m.locale === "en" ? props.nlbError : m.nlbStopsFailed}
+        </p>
+      ) : null}
+      {props.mtrBusError ? (
+        <p className="basis-full text-xs text-red-100" role="alert">
+          {m.locale === "en" ? props.mtrBusError : m.mtrBusStopsFailed}
         </p>
       ) : null}
       {props.ferryError ? (
@@ -206,9 +326,34 @@ export function LayerDock(props: LayerDockProps) {
           {m.locale === "en" ? props.ferryError : m.ferryFailed}
         </p>
       ) : null}
+      {props.parkingError ? (
+        <p className="basis-full text-xs text-red-100" role="alert">
+          {m.locale === "en" ? props.parkingError : m.parkingFailed}
+        </p>
+      ) : null}
+      {props.motorcycleError ? (
+        <p className="basis-full text-xs text-red-100" role="alert">
+          {m.locale === "en" ? props.motorcycleError : m.motorcycleFailed}
+        </p>
+      ) : null}
+      {props.kerbError ? (
+        <p className="basis-full text-xs text-red-100" role="alert">
+          {m.locale === "en" ? props.kerbError : m.kerbFailed}
+        </p>
+      ) : null}
+      {props.meterError ? (
+        <p className="basis-full text-xs text-red-100" role="alert">
+          {m.locale === "en" ? props.meterError : m.meterFailed}
+        </p>
+      ) : null}
+      {props.chargerError ? (
+        <p className="basis-full text-xs text-red-100" role="alert">
+          {m.locale === "en" ? props.chargerError : m.chargerFailed}
+        </p>
+      ) : null}
       {props.kmbError ? (
         <p className="basis-full text-xs text-red-100" role="alert">
-          {m.locale === "en" ? props.kmbError : m.kmbFailed}
+          {m.locale === "en" ? props.kmbError : m.kmbStopsFailed}
         </p>
       ) : null}
     </div>

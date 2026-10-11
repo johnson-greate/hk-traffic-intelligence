@@ -58,7 +58,6 @@ Open [http://127.0.0.1:4317](http://127.0.0.1:4317).
 | `npm run dev` | Next.js on port 4317 |
 | `npm run lint` | ESLint |
 | `npm run dev:vinext` | The Cloudflare-oriented dev server on port 4318 |
-| `npm run deploy:vinext` | Deploy the worker, when Cloudflare credentials are available |
 
 The application is written with Next.js, React, MapLibre GL, and Tailwind CSS, and the public site runs as a Cloudflare Worker.
 

@@ -5,6 +5,7 @@ export default defineConfig({
     name: "hktraffic",
     entrypoint: "./src/worker.ts",
     compatibilityDate: "2026-09-29",
+    placement: { mode: "smart" },
     compatibilityFlags: ["nodejs_compat"],
     assets: { notFoundHandling: "none" },
     // The resource.hk zone is in the same Cloudflare account as this Worker.

@@ -7,13 +7,15 @@ const empty = (error: string): CitybusPlacesResponse => ({ ok: false, error, sto
 
 export function GET(request: Request) {
   const url = new URL(request.url)
+  const wide = url.searchParams.get("wide") === "1"
   const lng = Number(url.searchParams.get("lng"))
   const lat = Number(url.searchParams.get("lat"))
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
     return Response.json(empty("Citybus centre missing"), { status: 400 })
   }
+  const zoom = Number(url.searchParams.get("zoom"))
   try {
-    return Response.json(loadCitybusPlaces(lng, lat))
+    return Response.json(loadCitybusPlaces(lng, lat, wide, zoom))
   } catch (error) {
     return Response.json(empty(error instanceof Error ? error.message : "Citybus stops failed"), { status: 502 })
   }

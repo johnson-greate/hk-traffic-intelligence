@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { askFacts, otherSign } from "./ask-facts.ts"
 import type { AskInput } from "./ask-facts.ts"
 
-const leg = (code: string, minutes: number | null) => ({ code, name: code, minutes, colour: "green" as const })
+const leg = (code: string, minutes: number | null) => ({ code, name: code, nameTc: code, minutes, colour: "green" as const })
 const corridor = (id: string, roadTc: string, roadEn: string, speedKmh: number, lengthKm: number) => ({
   id,
   roadTc,

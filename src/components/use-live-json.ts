@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { nextReading } from "@/lib/last-reading"
+import { useEffect, useRef, useState } from "react"
+import { continueLiveRead, nextReading, scheduleLiveRead } from "@/lib/last-reading"
 import { politeQueue } from "@/lib/polite-fetch"
 
 const arrivalLane = politeQueue(1)
@@ -9,44 +9,78 @@ const arrivalLane = politeQueue(1)
 export function useLiveJson<T extends { ok: boolean }>(url: string | null, intervalMs = 60_000, shareArrivalLane = false): { data: T | null; error: string | null } {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const urlRef = useRef(url)
+  const shareRef = useRef(shareArrivalLane)
+  const gate = useRef({ running: false, again: false })
+  const stopped = useRef(false)
 
   useEffect(() => {
-    if (!url) return
-    let cancelled = false
-    let generation = 0
-    let abort: AbortController | null = null
+    stopped.current = false
+    return () => {
+      stopped.current = true
+    }
+  }, [])
 
-    const load = async () => {
-      const request = ++generation
-      abort?.abort()
-      const controller = new AbortController()
-      abort = controller
-      const run = shareArrivalLane ? (task: () => Promise<void>) => arrivalLane(task) : (task: () => Promise<void>) => task()
-      await run(async () => {
-        if (cancelled || request !== generation) return
-        try {
-          const response = await fetch(url, { cache: "no-store", signal: controller.signal })
-          const body: unknown = await response.json()
-          if (cancelled || request !== generation) return
-          if (!hasOk(body)) {
-            setError(`Unexpected response (${response.status})`)
-            return
-          }
-          const incoming = body as T
-          setData((current) => nextReading(current, incoming))
-          setError(incoming.ok ? null : readingError(incoming, response.status))
-        } catch (cause) {
-          if (cancelled || request !== generation || controller.signal.aborted) return
-          setError(cause instanceof Error ? cause.message : "Request failed")
+  useEffect(() => {
+    urlRef.current = url
+    shareRef.current = shareArrivalLane
+    if (!url) return
+    let alive = true
+
+    const load = async (keep: boolean) => {
+      if (stopped.current) return
+      const step = scheduleLiveRead(gate.current.running, urlRef.current)
+      switch (step) {
+        case "stop":
+          return
+        case "wait":
+          if (keep) gate.current.again = true
+          return
+        case "fetch":
+          break
+        default: {
+          const exhaustive: never = step
+          return exhaustive
         }
-      })
+      }
+      gate.current.running = true
+      try {
+        do {
+          gate.current.again = false
+          const target = urlRef.current
+          if (!target || stopped.current) break
+          const run = shareRef.current ? (task: () => Promise<void>) => arrivalLane(task) : (task: () => Promise<void>) => task()
+          await run(async () => {
+            if (stopped.current) return
+            try {
+              const response = await fetch(target, { cache: "no-store" })
+              const body: unknown = await response.json()
+              if (stopped.current) return
+              if (!hasOk(body)) {
+                if (urlRef.current === target) setError(`Unexpected response (${response.status})`)
+                return
+              }
+              const incoming = body as T
+              setData((current) => nextReading(current, incoming))
+              if (incoming.ok || urlRef.current === target) setError(incoming.ok ? null : readingError(incoming, response.status))
+            } catch (cause) {
+              if (stopped.current || urlRef.current !== target) return
+              setError(cause instanceof Error ? cause.message : "Request failed")
+            }
+          })
+          if (continueLiveRead(target, urlRef.current)) gate.current.again = true
+        } while (gate.current.again && !stopped.current)
+      } finally {
+        gate.current.running = false
+      }
     }
 
-    void load()
-    const timer = window.setInterval(() => void load(), intervalMs)
+    void load(false)
+    const timer = window.setInterval(() => {
+      if (alive) void load(true)
+    }, intervalMs)
     return () => {
-      cancelled = true
-      abort?.abort()
+      alive = false
       window.clearInterval(timer)
     }
   }, [intervalMs, shareArrivalLane, url])

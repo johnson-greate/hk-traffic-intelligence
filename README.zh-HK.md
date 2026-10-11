@@ -56,7 +56,6 @@ npm run dev
 | `npm run dev` | 在 4317 埠啟動 Next.js |
 | `npm run lint` | ESLint |
 | `npm run dev:vinext` | 在 4318 埠啟動面向 Cloudflare 的開發伺服器 |
-| `npm run deploy:vinext` | 在已有 Cloudflare 憑證時部署 Worker |
 
 程式以 Next.js、React、MapLibre GL 和 Tailwind CSS 撰寫，公開網站以 Cloudflare Worker 提供。
 

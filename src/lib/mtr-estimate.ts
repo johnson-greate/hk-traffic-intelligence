@@ -1,3 +1,5 @@
+import { mixOnSpan, pointOnSpan, segmentLength } from "./rail-tracks.ts"
+
 // MTR publishes the minutes until a train reaches a station. It does not publish
 // where that train is. A position is the countdown walked back along the station
 // spacing: a short hop is about 43 km/h, a longer one about 65 km/h. Where two
@@ -160,7 +162,7 @@ export function estimateTrains(
       serial += 1
     }
   }
-  return enteredService(trains, locate)
+  return separateArrivals(enteredService(trains, locate), locate)
 }
 
 export function projectTrain(train: EstimatedTrain, locate: (code: string) => GeoPoint | null, atMs: number): TrainSpot | null {
@@ -213,17 +215,11 @@ function approachStation(
     const start = locate(previous)
     const end = locate(here)
     if (!start || !end) break
-    const segment = segmentMinutes(metresBetween(start, end))
+    const segment = segmentMinutes(segmentLength(previous, here, start, end))
     if (remain <= segment) {
       const mix = segment <= 0 ? 1 : 1 - remain / segment
-      return {
-        lng: start.lng + (end.lng - start.lng) * mix,
-        lat: start.lat + (end.lat - start.lat) * mix,
-        from: previous,
-        to: here,
-        clamp: "none",
-        minutes: remain,
-      }
+      const point = pointOnSpan(previous, here, start, end, mix)
+      return { lng: point.lng, lat: point.lat, from: previous, to: here, clamp: "none", minutes: remain }
     }
     remain -= segment
     at -= 1
@@ -251,17 +247,11 @@ function rideForward(
     const start = locate(here)
     const end = locate(next)
     if (!start || !end) break
-    const segment = segmentMinutes(metresBetween(start, end))
+    const segment = segmentMinutes(segmentLength(here, next, start, end))
     if (remain <= segment) {
       const mix = segment <= 0 ? 1 : remain / segment
-      return {
-        lng: start.lng + (end.lng - start.lng) * mix,
-        lat: start.lat + (end.lat - start.lat) * mix,
-        from: here,
-        to: next,
-        clamp: "none",
-        minutes: Math.max(0, segment - remain),
-      }
+      const point = pointOnSpan(here, next, start, end, mix)
+      return { lng: point.lng, lat: point.lat, from: here, to: next, clamp: "none", minutes: Math.max(0, segment - remain) }
     }
     remain -= segment
     index += 1
@@ -275,6 +265,103 @@ function rideForward(
 
 function atPoint(point: GeoPoint, code: string, minutes: number): TrainSpot {
   return { lng: point.lng, lat: point.lat, from: code, to: code, clamp: "none", minutes: Math.max(0, minutes) }
+}
+
+const PILE_M = 40
+
+// A junction used to pin every unmatched arrival to the same station. The clocks
+// still differed, but the dots left together at one speed. Walk each clock back
+// along the path it already has. A later train with nowhere to stand is not drawn
+// on top of the earlier one.
+function separateArrivals(trains: EstimatedTrain[], locate: (code: string) => GeoPoint | null): EstimatedTrain[] {
+  const opened = trains.map((train) => ({ train: { ...train, hold: [...train.hold] }, spot: projectTrain(train, locate, train.observedAt) }))
+  for (let i = 0; i < opened.length; i++) {
+    const left = opened[i]
+    if (!left?.spot || left.spot.from !== left.spot.to) continue
+    const pile = [i]
+    for (let j = i + 1; j < opened.length; j++) {
+      const right = opened[j]
+      if (!right?.spot || right.spot.from !== right.spot.to || left.train.line !== right.train.line) continue
+      if (metresBetween(left.spot, right.spot) >= PILE_M) continue
+      pile.push(j)
+    }
+    if (pile.length < 2) continue
+    for (const index of pile) {
+      const train = opened[index]?.train
+      if (!train || train.timeType === "D") continue
+      const at = train.path.indexOf(train.anchor)
+      if (at <= 0) continue
+      const hold = new Set(train.hold)
+      if (train.path.slice(0, at).every((code) => hold.has(code))) continue
+      train.hold = [...new Set(train.path)]
+    }
+  }
+  const revised = opened.map((item) => ({ train: item.train, spot: projectTrain(item.train, locate, item.train.observedAt) }))
+  const drop = new Set<number>()
+  for (let i = 0; i < revised.length; i++) {
+    if (drop.has(i)) continue
+    const left = revised[i]
+    if (!left?.spot || left.spot.from !== left.spot.to) continue
+    for (let j = i + 1; j < revised.length; j++) {
+      if (drop.has(j)) continue
+      const right = revised[j]
+      if (!right?.spot || right.spot.from !== right.spot.to) continue
+      if (metresBetween(left.spot, right.spot) >= PILE_M) continue
+      if (left.train.ttnt === right.train.ttnt) continue
+      const later = left.train.ttnt > right.train.ttnt ? i : j
+      drop.add(later)
+      if (later === i) break
+    }
+  }
+  return collapseSameService(revised.filter((_, index) => !drop.has(index)).map((item) => item.train), locate)
+}
+
+const SAME_SERVICE_M = 200
+
+// Two estimates of one train can still land on top of each other when the
+// station chain missed the link. A real following train is minutes apart.
+function collapseSameService(trains: EstimatedTrain[], locate: (code: string) => GeoPoint | null): EstimatedTrain[] {
+  const placed = trains.map((train) => ({ train, spot: projectTrain(train, locate, train.observedAt) }))
+  const drop = new Set<number>()
+  for (let i = 0; i < placed.length; i++) {
+    if (drop.has(i)) continue
+    const left = placed[i]
+    if (!left?.spot) continue
+    for (let j = i + 1; j < placed.length; j++) {
+      if (drop.has(j)) continue
+      const right = placed[j]
+      if (!right?.spot || left.train.line !== right.train.line || left.train.dest !== right.train.dest) continue
+      if (metresBetween(left.spot, right.spot) >= SAME_SERVICE_M) continue
+      const later = serviceRank(left.train, left.spot, locate) >= serviceRank(right.train, right.spot, locate) ? j : i
+      drop.add(later)
+      if (later === i) break
+    }
+  }
+  return placed.filter((_, index) => !drop.has(index)).map((item) => item.train)
+}
+
+function serviceRank(train: EstimatedTrain, spot: TrainSpot, locate: (code: string) => GeoPoint | null): number {
+  const moving = spot.from !== spot.to ? 1_000_000 : 0
+  return moving + metresAlong(train, spot, locate) - train.ttnt
+}
+
+function metresAlong(train: EstimatedTrain, spot: TrainSpot, locate: (code: string) => GeoPoint | null): number {
+  let metres = 0
+  for (let index = 1; index < train.path.length; index += 1) {
+    const from = train.path[index - 1]
+    const to = train.path[index]
+    const start = from ? locate(from) : null
+    const finish = to ? locate(to) : null
+    const step = start && finish && from && to ? segmentLength(from, to, start, finish) : 0
+    if (from === spot.from && to === spot.to && start) {
+      if (!finish || !to || step <= 0) return metres
+      const along = step * mixOnSpan(from, to, start, finish, spot)
+      return metres + Math.min(step, Math.max(0, along))
+    }
+    if (from === spot.from && spot.from === spot.to) return metres
+    metres += step
+  }
+  return metres
 }
 
 function enteredService(
@@ -458,7 +545,7 @@ function dueError(
     const to = path[cursor + 1]
     const start = from ? locate(from) : null
     const end = to ? locate(to) : null
-    const minutes = start && end ? segmentMinutes(metresBetween(start, end)) : 2
+    const minutes = start && end && from && to ? segmentMinutes(segmentLength(from, to, start, end)) : 2
     travelMs += minutes * 60_000
   }
   return Math.abs(dueAt - (last.dueAt + travelMs))

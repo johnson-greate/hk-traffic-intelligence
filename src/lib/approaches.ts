@@ -1,18 +1,6 @@
 import { standardHan } from "./camera-place.ts"
+import type { JourneyMinute } from "./journey-times.ts"
 import type { ApproachLeg, ApproachPoint, HarbourJourney } from "@/lib/types"
-
-// HKeMobility journey-time boards whose roads approach a Victoria Harbour crossing.
-const APPROACH_LOCATION_IDS: ReadonlySet<string> = new Set([
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H11",
-  "K02",
-  "K03",
-  "K07",
-  "K08",
-])
 
 const CROSSING_ORDER = ["CH", "EH", "WH"] as const
 
@@ -26,20 +14,25 @@ export function readApproachPoints(
   wfs: unknown,
   detailsById: Readonly<Record<string, unknown>>,
   traditionalWfs: unknown = null,
+  minutes: readonly JourneyMinute[] | null = null,
+  traditionalDetails: Readonly<Record<string, unknown>> | null = null,
 ): { points: ApproachPoint[]; capturedAt: string | null } {
   const traditional = locationNames(traditionalWfs)
+  const byLocation = minutesByLocation(minutes)
   const points: ApproachPoint[] = []
   let capturedAt: string | null = null
 
   for (const feature of featuresOf(wfs)) {
     const id = text(feature.properties?.LOCATION_ID)
-    if (!APPROACH_LOCATION_IDS.has(id)) continue
+    if (!id) continue
     const coordinates = pointOf(feature.geometry)
     if (!coordinates) continue
     const detail = detailsById[id]
-    const legs = legsOf(detail).filter((leg) => leg.minutes != null)
+    const published = byLocation?.get(id)
+    const traditionalDetail = traditionalDetails?.[id]
+    const legs = (published ? legsFromMinutes(published, detail, traditionalDetail) : legsOf(detail, traditionalDetail)).filter((leg) => leg.minutes != null)
     if (legs.length === 0) continue
-    const dated = firstDate(detail)
+    const dated = published ? latestCapture(published) : firstDate(detail)
     if (dated && (!capturedAt || dated > capturedAt)) capturedAt = dated
     const named = text(feature.properties?.LOCATION) || textFromDetail(detail)
     points.push({
@@ -70,25 +63,87 @@ function featuresOf(wfs: unknown): Feature[] {
   return wfs.features.flatMap((feature) => (isFeature(feature) ? [feature] : []))
 }
 
-function legsOf(detail: unknown): ApproachLeg[] {
+function minutesByLocation(minutes: readonly JourneyMinute[] | null): Map<string, JourneyMinute[]> | null {
+  if (!minutes) return null
+  const grouped = new Map<string, JourneyMinute[]>()
+  for (const row of minutes) {
+    const list = grouped.get(row.locationId) ?? []
+    list.push(row)
+    grouped.set(row.locationId, list)
+  }
+  return grouped
+}
+
+function legsFromMinutes(rows: readonly JourneyMinute[], detail: unknown, traditional: unknown): ApproachLeg[] {
+  const byCode = new Map<string, ApproachLeg>()
+  for (const row of rows) {
+    if (byCode.has(row.destinationId)) continue
+    byCode.set(row.destinationId, {
+      code: row.destinationId,
+      name: destinationSentence(detail, row.destinationId) || crossingName(row.destinationId),
+      nameTc: traditionalName(traditional, row.destinationId),
+      minutes: row.minutes,
+      colour: row.colour,
+    })
+  }
+  return ordered(byCode)
+}
+
+function legsOf(detail: unknown, traditional: unknown): ApproachLeg[] {
   if (!Array.isArray(detail)) return []
   const byCode = new Map<string, ApproachLeg>()
   for (const row of detail) {
     if (!isRecord(row) || !isRecord(row.dest)) continue
     const code = text(row.dest.did)
-    if (!isCrossing(code) || byCode.has(code)) continue
-    const minutes = minutesOf(row.dest.time)
+    if (!code || byCode.has(code)) continue
     byCode.set(code, {
       code,
-      name: plain(text(row.dest.desc)) || CROSSING_NAMES[code],
-      minutes,
+      name: plain(text(row.dest.desc)) || crossingName(code),
+      nameTc: traditionalName(traditional, code),
+      minutes: minutesOf(row.dest.time),
       colour: colourOf(row.dest.cid),
     })
   }
-  return CROSSING_ORDER.flatMap((code) => {
+  return ordered(byCode)
+}
+
+function ordered(byCode: Map<string, ApproachLeg>): ApproachLeg[] {
+  const harbour = CROSSING_ORDER.flatMap((code) => {
     const leg = byCode.get(code)
     return leg ? [leg] : []
   })
+  const rest = [...byCode.keys()]
+    .filter((code) => !isCrossing(code))
+    .sort((a, b) => a.localeCompare(b, "en"))
+    .flatMap((code) => {
+      const leg = byCode.get(code)
+      return leg ? [leg] : []
+    })
+  return [...harbour, ...rest]
+}
+
+function latestCapture(rows: readonly JourneyMinute[]): string | null {
+  let latest = ""
+  for (const row of rows) {
+    if (row.capturedAt > latest) latest = row.capturedAt
+  }
+  return latest || null
+}
+
+function traditionalName(detail: unknown, code: string): string {
+  const name = destinationSentence(detail, code)
+  return name ? standardHan(name) : ""
+}
+
+function destinationSentence(detail: unknown, code: string): string {
+  if (!Array.isArray(detail)) return ""
+  for (const row of detail) {
+    if (!isRecord(row) || !isRecord(row.dest)) continue
+    if (text(row.dest.did) !== code) continue
+    const name = plain(text(row.dest.desc))
+    if (name) return name
+  }
+  return ""
 }
 
 function firstDate(detail: unknown): string | null {
@@ -145,11 +200,16 @@ function isCrossing(code: string): code is (typeof CROSSING_ORDER)[number] {
   return code === "CH" || code === "EH" || code === "WH"
 }
 
+function crossingName(code: string): string {
+  if (isCrossing(code)) return CROSSING_NAMES[code]
+  return code
+}
+
 function plain(value: string): string {
   return value
     .replace(/<br\s*\/?>/gi, " ")
     .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/[\s\u3000]+/g, " ")
     .trim()
 }
 

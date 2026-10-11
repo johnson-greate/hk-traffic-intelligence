@@ -1,15 +1,19 @@
 "use client"
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import { createPortal, flushSync } from "react-dom"
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
+import { createPortal } from "react-dom"
+import { Fold, FoldMark } from "@/components/fold-mark"
 import { useI18n } from "@/components/locale"
 import { boundaryGlance } from "@/lib/control-points"
 import { crossingsFrom, nearestApproach } from "@/lib/crossings"
 import { displayText, formatClock, LOCALE_MARK, LOCALES, type Messages } from "@/lib/i18n"
 import { CHANGELOG, changelogText } from "@/lib/changelog"
-import { INTEL_TABS, intelBoard, type IntelItem, type IntelTab } from "@/lib/intel"
+import type { BoardFault } from "@/lib/board-status"
+import { layerForIntel } from "@/lib/intel-focus"
+import { firstOpenBoundary, INTEL_TABS, intelBoard, type IntelItem, type IntelTab } from "@/lib/intel"
+import { INTEL_PHONE_QUERY, preferenceServerSnapshot, preferenceSnapshot, subscribePreferences, updatePreference } from "@/lib/preferences"
 import { formatSpeed } from "@/lib/speed"
-import type { ApproachPoint, ApproachesResponse, HarbourJourney, TrafficResponse, WeatherConditions, WeatherWarning } from "@/lib/types"
+import type { ApproachPoint, ApproachesResponse, HarbourJourney, TrafficResponse, WatchLayer, WeatherConditions, WeatherWarning } from "@/lib/types"
 import { weatherBar } from "@/lib/warnings"
 
 type OpsHudProps = {
@@ -35,10 +39,13 @@ type OpsHudProps = {
   citybusError: string | null
   gmbError: string | null
   nlbError: string | null
+  mtrBusError: string | null
   ferryError: string | null
+  boardFaults: readonly BoardFault[]
   open: boolean
+  choice: boolean | null
   onOpenChange: (open: boolean) => void
-  onFocus: (focus: { id: string; coordinates: [number, number] }) => void
+  onFocus: (focus: { id: string; coordinates: [number, number]; layer: WatchLayer | null }) => void
   view: { lng: number; lat: number; zoom: number } | null
 }
 
@@ -58,9 +65,13 @@ const BAR_KEY = {
 export function OpsHud(props: OpsHudProps) {
   const { locale, setLocale, messages: m } = useI18n()
   const clock = useHongKongClock(locale)
-  const [tab, setTab] = useState<IntelTab>("ranked")
-  const [barOpen, setBarOpen] = useState(true)
-  const [pinnedOrigin, setPinnedOrigin] = useState<string | null>(null)
+  const prefs = useSyncExternalStore(subscribePreferences, preferenceSnapshot, preferenceServerSnapshot)
+  const tab = prefs.intelTab
+  const setTab = (next: IntelTab) => updatePreference({ intelTab: next })
+  const barOpen = prefs.barOpen
+  const setBarOpen = (next: boolean) => updatePreference({ barOpen: next })
+  const pinnedOrigin = prefs.pinnedOrigin
+  const setPinnedOrigin = (next: string | null) => updatePreference({ pinnedOrigin: next })
   const open = props.open
   const approachPoints = props.approaches?.ok ? props.approaches.points : []
   const nearest = nearestApproach(approachPoints, props.view)
@@ -93,42 +104,34 @@ export function OpsHud(props: OpsHudProps) {
     citybusError: props.citybusError,
     gmbError: props.gmbError,
     nlbError: props.nlbError,
+    mtrBusError: props.mtrBusError,
     ferryError: props.ferryError,
     mapError: props.mapLive ? null : m.mapFailed,
+    boardFaults: props.boardFaults,
   }, m)
   const intel = board[tab]
-  const urgentCount = intel.filter((item) => item.urgent).length
-  const marqueeSeconds = Math.max(28, intel.length * 9)
+  const ranked = board.ranked
+  const urgentCount = ranked.filter((item) => item.urgent).length
+  const marqueeSeconds = Math.max(28, ranked.length * 9)
   const halls = boundaryGlance(props.controlPoints, props.controlError, m)
   const weather = weatherBar(props.warnings, props.conditions)
   const incidentCount = props.incidents?.features.length ?? 0
   const firstIncident = board.roads.find((item) => item.kind === "incident" && item.coordinates)
   const worstRoad = board.roads.find((item) => item.coordinates && (item.kind === "jam" || item.kind === "slow" || item.kind === "incident"))
-  const worstHall = board.boundary.find((item) => item.coordinates)
+  const worstHall = firstOpenBoundary(board.boundary)
   const changeOpen = (next: boolean) => {
     if (next === open) return
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    if (reduced || typeof document.startViewTransition !== "function") {
-      props.onOpenChange(next)
-      return
-    }
-    try {
-      document.startViewTransition(() => {
-        flushSync(() => props.onOpenChange(next))
-      })
-    } catch {
-      props.onOpenChange(next)
-    }
+    props.onOpenChange(next)
   }
   const show = (next: IntelTab, item: IntelItem | undefined) => {
     setTab(next)
     changeOpen(true)
-    if (item?.coordinates) props.onFocus({ id: item.id, coordinates: item.coordinates })
+    if (item?.coordinates) props.onFocus({ id: item.id, coordinates: item.coordinates, layer: layerForIntel(item.kind) })
   }
   useEffect(() => {
     const root = document.documentElement
     const apply = () => {
-      const narrow = window.matchMedia("(max-width: 639px)").matches
+      const narrow = window.matchMedia(INTEL_PHONE_QUERY).matches
       const attrib = document.querySelector<HTMLElement>(".maplibregl-ctrl-attrib")
       const attribBox = attrib?.getBoundingClientRect()
       if (narrow && !open && attribBox && attribBox.height > 2) {
@@ -213,21 +216,21 @@ export function OpsHud(props: OpsHudProps) {
   }, [barOpen, locale, open, props.mapLive])
   return (
     <div className="@container/hud pointer-events-none absolute inset-0 z-[5]">
-      {barOpen ? null : (
+      <Fold open={!barOpen} className="pointer-events-auto absolute top-2 left-2 z-[6] sm:hidden">
         <button
           type="button"
           aria-expanded={false}
           onClick={() => setBarOpen(true)}
-          className="pointer-events-auto absolute top-2 left-2 border border-cyan-200/30 bg-[#041018]/88 px-2 py-1 font-[family-name:var(--font-hud)] text-sm text-white sm:hidden"
+          className="inline-flex items-center gap-1.5 border border-cyan-200/30 bg-[#041018]/88 px-2 py-1 font-[family-name:var(--font-hud)] text-sm text-white"
         >
           {m.productName}
+          <FoldMark open={false} />
         </button>
-      )}
+      </Fold>
+      <Fold open={barOpen} live className="bar-fold pointer-events-auto absolute top-2 right-2 left-2 sm:top-3 sm:right-3 sm:left-3 lg:right-4 lg:left-16">
       <header
         data-map-chrome="top"
-        className={`pointer-events-auto absolute top-2 right-2 left-2 flex flex-row items-center gap-1 border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:top-3 sm:right-3 sm:left-3 sm:flex-col sm:items-stretch sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[64rem]/hud:flex-row @min-[64rem]/hud:items-center lg:right-4 lg:left-16 ${
-          barOpen ? "" : "max-sm:hidden"
-        }`}
+        className="flex flex-row items-center gap-1 border border-cyan-200/30 bg-[#041018]/80 px-1.5 py-1 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:flex-col sm:items-stretch sm:gap-1.5 sm:px-2 sm:py-1.5 @min-[64rem]/hud:flex-row @min-[64rem]/hud:items-center"
       >
         <div className="flex shrink-0 items-center gap-1 sm:min-w-0 sm:flex-wrap sm:gap-3">
           <div className="min-w-0 max-w-14 sm:max-w-none">
@@ -276,7 +279,7 @@ export function OpsHud(props: OpsHudProps) {
               onChoose={(id) => {
                 setPinnedOrigin(id)
                 const point = id ? approachPoints.find((item) => item.id === id) : nearest
-                if (point) props.onFocus({ id: `harbour-origin-${point.id}`, coordinates: point.coordinates })
+                if (point) props.onFocus({ id: `harbour-origin-${point.id}`, coordinates: point.coordinates, layer: null })
               }}
             />
           ) : null}
@@ -292,7 +295,7 @@ export function OpsHud(props: OpsHudProps) {
                   tone={TONE.none}
                   hint={m.harbourMissingHint}
                   onClick={() => {
-                    if (origin) props.onFocus({ id: `harbour-origin-${origin.id}`, coordinates: origin.coordinates })
+                    if (origin) props.onFocus({ id: `harbour-origin-${origin.id}`, coordinates: origin.coordinates, layer: null })
                   }}
                 />
               )
@@ -306,7 +309,7 @@ export function OpsHud(props: OpsHudProps) {
                 value={m.minutes(crossing.minutes)}
                 tone={TONE[crossing.colour]}
                 hint={`${m.approachHint(road)} ${compare}`}
-                onClick={() => props.onFocus({ id: `crossing-${crossing.code}`, coordinates: crossing.coordinates })}
+                onClick={() => props.onFocus({ id: `crossing-${crossing.code}`, coordinates: crossing.coordinates, layer: "tolls" })}
               />
             )
           }) : null}
@@ -383,87 +386,84 @@ export function OpsHud(props: OpsHudProps) {
             type="button"
             aria-expanded={barOpen}
             onClick={() => setBarOpen(false)}
-            className="shrink-0 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
+            className="inline-flex shrink-0 items-center gap-1 border border-white/15 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] text-cyan-50 sm:hidden"
           >
             {m.hide}
+            <FoldMark open />
           </button>
         </div>
       </header>
+      </Fold>
       <section
         id="harbour-intel"
         data-map-chrome="panel"
+        data-intel-open={props.choice === null ? undefined : props.choice ? "true" : "false"}
         className={
           open
             ? "pointer-events-auto absolute right-3 bottom-[var(--intel-bottom,6rem)] z-[6] w-[min(22rem,calc(100%-1.5rem))] border border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:bottom-36 lg:right-4 lg:bottom-14"
             : "pointer-events-auto absolute inset-x-0 bottom-[var(--marquee-bottom,3.5rem)] z-[6] border-t border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:bottom-14"
         }
       >
-        <div className="flex items-center gap-1 px-1.5 py-1">
-          {open ? (
-            <>
-              <div role="tablist" aria-label={m.intel} className="flex min-w-0 flex-1 flex-wrap gap-0.5">
-                {INTEL_TABS.map((id, index) => {
-                  const selected = tab === id
-                  const urgent = board[id].some((row) => row.urgent)
-                  return (
-                    <button
-                      key={id}
-                      id={`intel-tab-${id}`}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      aria-controls="harbour-intel-list"
-                      tabIndex={selected ? 0 : -1}
-                      onClick={() => setTab(id)}
-                      onKeyDown={(event) => onTabKey(event, index, setTab)}
-                      className={`inline-flex shrink-0 items-center gap-1 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.08em] uppercase ${
-                        selected ? "border-b-2 border-cyan-200 text-white" : "border-b-2 border-transparent text-cyan-100/70"
-                      }`}
-                    >
-                      {tabLabel(id, m)}
-                      {urgent ? <span className="size-1 rounded-full bg-[#FF5D73]" /> : null}
-                    </button>
-                  )
-                })}
-              </div>
-              <button
-                type="button"
-                aria-expanded={open}
-                aria-controls="harbour-intel-list"
-                onClick={() => changeOpen(false)}
-                className="ml-auto shrink-0 border border-white/15 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 uppercase"
-              >
-                {m.hide}
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.14em] text-cyan-100/70 uppercase">
-                {tabLabel(tab, m)}
-              </span>
-              {tab === "notes" ? (
-                <p className="min-w-0 flex-1 truncate text-sm text-zinc-200">
-                  {CHANGELOG[0] ? changelogText(CHANGELOG[0], locale) : m.changelog}
-                </p>
-              ) : (
-                <IntelMarquee items={intel} empty={emptyCopy(tab, m)} seconds={marqueeSeconds} onFocus={props.onFocus} />
-              )}
-              {urgentCount > 0 ? (
-                <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-[#FF5D73] uppercase">{urgentCount}</span>
-              ) : null}
-              <button
-                type="button"
-                aria-expanded={open}
-                aria-controls="harbour-intel-list"
-                onClick={() => changeOpen(true)}
-                className="ml-1 shrink-0 border border-white/15 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 uppercase"
-              >
-                {m.intel}
-              </button>
-            </>
-          )}
+        <Fold open={!open} className="intel-strip-fold">
+        <div className="intel-strip items-center gap-1 px-1.5 py-1">
+          <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.14em] text-cyan-100/70 uppercase">
+            {tabLabel("ranked", m)}
+          </span>
+          <IntelMarquee items={ranked} empty={emptyCopy("ranked", m)} seconds={marqueeSeconds} onFocus={props.onFocus} />
+          {urgentCount > 0 ? (
+            <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-[#FF5D73] uppercase">{urgentCount}</span>
+          ) : null}
+          <button
+            type="button"
+            aria-expanded={props.choice === true}
+            aria-controls="harbour-intel-list"
+            onClick={() => changeOpen(true)}
+            className="ml-1 inline-flex shrink-0 items-center gap-1 border border-white/15 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 uppercase"
+          >
+            {m.intel}
+            <FoldMark open={false} />
+          </button>
         </div>
-        {open ? (
+        </Fold>
+        <Fold open={open} className="intel-panel-fold">
+        <div className="intel-panel">
+          <div className="flex items-center gap-1 px-1.5 py-1">
+            <div role="tablist" aria-label={m.intel} className="flex min-w-0 flex-1 flex-wrap gap-0.5">
+              {INTEL_TABS.map((id, index) => {
+                const selected = tab === id
+                const urgent = board[id].some((row) => row.urgent)
+                return (
+                  <button
+                    key={id}
+                    id={`intel-tab-${id}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls="harbour-intel-list"
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setTab(id)}
+                    onKeyDown={(event) => onTabKey(event, index, setTab)}
+                    className={`inline-flex shrink-0 items-center gap-1 px-1.5 py-1 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.08em] uppercase ${
+                      selected ? "border-b-2 border-cyan-200 text-white" : "border-b-2 border-transparent text-cyan-100/70"
+                    }`}
+                  >
+                    {tabLabel(id, m)}
+                    {urgent ? <span className="size-1 rounded-full bg-[#FF5D73]" /> : null}
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls="harbour-intel-list"
+              onClick={() => changeOpen(false)}
+              className="ml-auto inline-flex shrink-0 items-center gap-1 border border-white/15 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 uppercase"
+            >
+              {m.hide}
+              <FoldMark open />
+            </button>
+          </div>
           <div
             id="harbour-intel-list"
             role="tabpanel"
@@ -484,7 +484,8 @@ export function OpsHud(props: OpsHudProps) {
               </ol>
             )}
           </div>
-        ) : null}
+        </div>
+        </Fold>
       </section>
     </div>
   )
@@ -551,25 +552,28 @@ function OriginMenu(props: {
         className="block max-w-28 border border-white/10 bg-black/30 px-1 py-1 text-left sm:max-w-56 sm:px-2"
       >
         <span className="block font-[family-name:var(--font-hud)] text-[0.58rem] tracking-[0.14em] text-cyan-100/80 uppercase">{m.harbourFrom}</span>
-        <span className="block truncate font-[family-name:var(--font-hud)] text-sm leading-none text-white sm:text-base">
-          {props.pinnedId ? road : m.followMap(road)}
+        <span className="flex items-center gap-1">
+          <span className="truncate font-[family-name:var(--font-hud)] text-sm leading-none text-white sm:text-base">
+            {props.pinnedId ? road : m.followMap(road)}
+          </span>
+          <FoldMark open={open} />
         </span>
       </button>
-      {open && box
+      {box
         ? createPortal(
-            <div
-              ref={menuRef}
-              role="listbox"
-              aria-label={m.harbourFrom}
-              style={{ top: box.top, left: box.left, width: box.width, maxHeight: box.maxHeight }}
-              className="fixed z-50 overflow-y-auto border border-cyan-200/30 bg-[#041018] p-1 text-sm text-white shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+            <Fold
+              open={open}
+              className="fixed z-50 border border-cyan-200/30 bg-[#041018] text-sm text-white shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+              style={{ top: box.top, left: box.left, width: box.width }}
             >
+            <div ref={menuRef} role="listbox" aria-label={m.harbourFrom} className="overflow-y-auto p-1" style={{ maxHeight: box.maxHeight }}>
               <OriginChoice selected={props.pinnedId == null} onChoose={() => choose(null)}>
                 {m.followMap(props.nearest ? displayText(locale, props.nearest.nameTc, props.nearest.name) : "")}
               </OriginChoice>
               <OriginList label={m.fromIsland} points={props.island} pinnedId={props.pinnedId} onChoose={choose} />
               <OriginList label={m.fromKowloon} points={props.kowloon} pinnedId={props.pinnedId} onChoose={choose} />
-            </div>,
+            </div>
+            </Fold>,
             document.body,
           )
         : null}
@@ -696,10 +700,19 @@ function onTabKey(event: KeyboardEvent<HTMLButtonElement>, index: number, setTab
 
 function IntelMarquee(props: { items: IntelItem[]; empty: string; seconds: number; onFocus: OpsHudProps["onFocus"] }) {
   const { messages } = useI18n()
+  const track = useRef<HTMLDivElement>(null)
   const items = props.items.length > 0 ? props.items : [quietItem(props.empty, messages.clear)]
+  const line = `${props.seconds}:${items.map((item) => item.id).join("|")}`
+  useEffect(() => {
+    const node = track.current
+    if (!node) return
+    node.style.animationName = "none"
+    void node.offsetWidth
+    node.style.animationName = ""
+  }, [line])
   return (
-    <div className="min-w-0 flex-1 overflow-hidden" aria-label={messages.intel}>
-      <div className="intel-marquee flex w-max" style={{ animationDuration: `${props.seconds}s` }}>
+    <div className="min-w-0 flex-1 overflow-clip" aria-label={messages.intel}>
+      <div ref={track} className="intel-marquee flex w-max" style={{ animationDuration: `${props.seconds}s` }}>
         {[0, 1].map((copy) => (
           <div key={copy} className="intel-marquee-copy flex shrink-0 items-center" aria-hidden={copy === 1}>
             {items.map((item) => (
@@ -710,7 +723,7 @@ function IntelMarquee(props: { items: IntelItem[]; empty: string; seconds: numbe
                 disabled={item.coordinates == null}
                 onClick={() => {
                   if (!item.coordinates) return
-                  props.onFocus({ id: item.id, coordinates: item.coordinates })
+                  props.onFocus({ id: item.id, coordinates: item.coordinates, layer: layerForIntel(item.kind) })
                 }}
                 className="mx-5 whitespace-nowrap font-[family-name:var(--font-hud)] text-[0.72rem] text-cyan-50 disabled:cursor-default"
               >
@@ -734,7 +747,7 @@ function IntelRow(props: { item: IntelItem; onFocus: OpsHudProps["onFocus"] }) {
       disabled={item.coordinates == null}
       onClick={() => {
         if (!item.coordinates) return
-        props.onFocus({ id: item.id, coordinates: item.coordinates })
+        props.onFocus({ id: item.id, coordinates: item.coordinates, layer: layerForIntel(item.kind) })
       }}
       className="flex w-full items-start gap-2 px-1 py-1 text-left enabled:hover:bg-white/5 disabled:cursor-default"
     >

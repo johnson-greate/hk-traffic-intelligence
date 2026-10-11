@@ -42,11 +42,16 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Local agent tooling. These files stay on a working machine and do not belong in the public repository.
 .cursor/
 AGENTS.md
 CLAUDE.md
+docs/superpowers/
+docs/branches.md
 scripts/ask-jev.mjs
+scripts/branch-register.mjs
+scripts/branch-register.test.mjs
+scripts/deploy-main.mjs
+scripts/build-*.mjs
 /dist/
 .vinext/
 .cloudflare/

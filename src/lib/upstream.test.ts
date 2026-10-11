@@ -51,7 +51,6 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: FetchInit) => {
 }) as typeof fetch
 
 const live = "https://rt.data.gov.hk/v2/transport/citybus/eta/example"
-// fetch() cacheTtl and cache.put of the same URL wait on each other. That never returns.
 const raced = await Promise.race([
   fetchUpstream(live, 60_000),
   new Promise<null>((resolve) => setTimeout(() => resolve(null), 300)),

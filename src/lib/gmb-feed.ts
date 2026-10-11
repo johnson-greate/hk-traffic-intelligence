@@ -1,14 +1,14 @@
 import { gmbDestination } from "@/lib/gmb-destinations"
-import { gmbStop, gmbStopsWithin } from "@/lib/gmb-reach"
+import { mergeSamePoles } from "@/lib/kmb-pole"
+import { gmbPoleIds, gmbStop, gmbStopsSpread, gmbStopsWithin } from "@/lib/gmb-reach"
 import { kmbReachMetres } from "@/lib/kmb-reach"
-import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
-import { pool } from "@/lib/pool"
-import { fetchUpstream } from "@/lib/upstream"
+import { readEtaJson } from "@/lib/eta-read"
+import { loadPoleBoard } from "@/lib/pole-board"
 import type { GmbCall, GmbPlacesResponse, GmbResponse, GmbStopBoard } from "@/lib/types"
 
 const GMB_CAP = 24
-const FETCH_LIMIT = 4
+// More than the nearest 24. The green-minibus catalogue is thousands of stops.
+const SOLO_CAP = 160
 const ETA_ROOT = "https://data.etagmb.gov.hk/eta/stop"
 
 type EtaEntry = {
@@ -26,11 +26,11 @@ type EtaRoute = {
   eta?: EtaEntry[] | null
 }
 
-const remembered = new Map<string, HeldRows<EtaRoute>>()
-
-export function loadGmbPlaces(lng: number, lat: number, _now = Date.now(), zoom = Number.NaN): GmbPlacesResponse {
+export function loadGmbPlaces(lng: number, lat: number, _now = Date.now(), zoom = Number.NaN, wide = false): GmbPlacesResponse {
   const stops: GmbPlacesResponse["stops"] = []
-  for (const stop of gmbStopsWithin(lng, lat, kmbReachMetres(zoom, lat), GMB_CAP)) {
+  const radius = kmbReachMetres(zoom, lat)
+  const found = wide ? gmbStopsSpread(lng, lat, radius, SOLO_CAP) : gmbStopsWithin(lng, lat, radius, GMB_CAP)
+  for (const stop of found) {
     const record = gmbStop(stop.id)
     if (!record) continue
     stops.push({
@@ -42,48 +42,31 @@ export function loadGmbPlaces(lng: number, lat: number, _now = Date.now(), zoom 
       routes: record.routes,
     })
   }
-  return { ok: true, stops }
+  return { ok: true, stops: mergeSamePoles(stops) }
 }
 
 export async function loadGmbNear(lng: number, lat: number, now = Date.now(), zoom = Number.NaN): Promise<GmbResponse> {
-  forgetStale(remembered, now)
-  const nearest = gmbStopsWithin(lng, lat, kmbReachMetres(zoom, lat), GMB_CAP)
-  const turn = await takeEtaTurn(async () => {
-    let missed = 0
-    await pool(nearest.map((stop) => stop.id), FETCH_LIMIT, async (stopId) => {
-      const cached = remembered.get(stopId)
-      if (!etaDue(cached, now)) return
-      const rows = await fetchStop(stopId)
-      if (rows) remembered.set(stopId, { at: now, rows })
-      else missed += 1
-    })
-    return missed
-  })
-  const missed = turn ?? 0
-
-  const stops: GmbStopBoard[] = []
-  for (const stop of nearest) {
-    const record = gmbStop(stop.id)
-    if (!record) continue
-    const rows = heldRows(remembered.get(stop.id), now) ?? []
-    stops.push({
-      id: stop.id,
-      nameTc: record.tc,
-      nameEn: record.en,
-      lng: record.lng,
-      lat: record.lat,
-      routes: record.routes,
-      calls: callsAt(rows, record.ids ?? {}, now),
-    })
-  }
-  const error = arrivalFailure(missed, stops.map((stop) => stop.calls.length), "Green minibus arrivals failed")
+  const places = loadGmbPlaces(lng, lat, now, zoom)
   return {
-    ok: true,
-    ...(error ? { error } : {}),
-    observedAt: new Date(now).toISOString(),
-    stops,
-    cacheable: turn !== null && missed === 0,
+    ok: places.ok,
+    observedAt: null,
+    stops: places.stops.map((stop) => ({ ...stop, calls: [], clock: "waiting" as const })),
+    cacheable: true,
   }
+}
+
+export function loadGmbBoard(id: string, now = Date.now()): Promise<{ ok: true; stop: GmbStopBoard } | { ok: false }> {
+  return loadPoleBoard(`gmb:${id}`, now, {
+    poleIds: () => gmbPoleIds(id),
+    pole: (stopId) => {
+      const record = gmbStop(stopId)
+      if (!record) return null
+      return { tc: record.tc, en: record.en, lng: record.lng, lat: record.lat, routes: record.routes }
+    },
+    jobs: (stopId) => [stopId],
+    rows: (stopId) => fetchStop(stopId),
+    calls: (stopId, _job, rows, at) => callsAt(rows, gmbStop(stopId)?.ids ?? {}, at),
+  })
 }
 
 function callsAt(rows: EtaRoute[], ids: Record<string, string>, now: number): GmbCall[] {
@@ -116,7 +99,7 @@ function callsAt(rows: EtaRoute[], ids: Record<string, string>, now: number): Gm
     const current = soonest.get(String(row.route_id))
     if (!current || (call.minutes ?? 999) < (current.minutes ?? 999)) soonest.set(String(row.route_id), call)
   }
-  return [...soonest.values()].sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999) || a.route.localeCompare(b.route, undefined, { numeric: true })).slice(0, 12)
+  return [...soonest.values()].sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999) || a.route.localeCompare(b.route, undefined, { numeric: true }))
 }
 
 function text(value: unknown): string {
@@ -124,18 +107,7 @@ function text(value: unknown): string {
 }
 
 async function fetchStop(stopId: string): Promise<EtaRoute[] | null> {
-  try {
-    const response = await etaQueue(() => fetchUpstream(`${ETA_ROOT}/${encodeURIComponent(stopId)}`, ETA_FRESH_MS, {
-      timeoutMs: 5_000,
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
-      },
-    }))
-    if (response.status !== 200) return null
-    const body = JSON.parse(new TextDecoder().decode(response.body)) as { data?: EtaRoute[] }
-    return Array.isArray(body.data) ? body.data : []
-  } catch {
-    return null
-  }
+  const body = await readEtaJson<{ data?: EtaRoute[] }>(`${ETA_ROOT}/${encodeURIComponent(stopId)}`)
+  if (!body) return null
+  return Array.isArray(body.data) ? body.data : []
 }

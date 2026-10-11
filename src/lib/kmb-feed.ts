@@ -1,16 +1,16 @@
 import { busCompany } from "@/lib/bus-company"
 import { refreshKmbCatalogueSoon } from "@/lib/kmb-catalogue"
-import { kmbStop, kmbStopsWithin } from "@/lib/kmb-network"
+import { kmbPoleIds, kmbStop, kmbStopsSpread, kmbStopsWithin } from "@/lib/kmb-network"
 import { kmbRoutesAt, refreshKmbRoutesSoon } from "@/lib/kmb-routes"
+import { mergeSamePoles } from "@/lib/kmb-pole"
 import { isListedKmbRow, kmbReachMetres, STOP_CAP } from "@/lib/kmb-reach"
-import { arrivalFailure, etaDue, ETA_FRESH_MS, forgetStale, heldRows, type HeldRows } from "@/lib/place-arrivals"
-import { etaQueue, takeEtaTurn } from "@/lib/polite-fetch"
-import { pool } from "@/lib/pool"
-import { fetchUpstream } from "@/lib/upstream"
+import { readEtaJson } from "@/lib/eta-read"
+import { loadPoleBoard } from "@/lib/pole-board"
 import type { KmbCall, KmbPlacesResponse, KmbResponse, KmbStopBoard } from "@/lib/types"
 
-const FETCH_LIMIT = 6
 const ETA_ROOT = "https://data.etabus.gov.hk/v1/transport/kmb/stop-eta"
+// More than the mixed 40. The full stop list is what stalled the phone.
+const SOLO_CAP = 160
 
 type EtaRow = {
   co?: string
@@ -23,51 +23,19 @@ type EtaRow = {
   rmk_tc?: string
 }
 
-const remembered = new Map<string, HeldRows<EtaRow>>()
-
-export function loadKmbPlaces(lng: number, lat: number, now = Date.now(), zoom = Number.NaN): KmbPlacesResponse {
+export function loadKmbPlaces(lng: number, lat: number, now = Date.now(), zoom = Number.NaN, wide = false): KmbPlacesResponse {
   refreshKmbCatalogueSoon(now)
   refreshKmbRoutesSoon(now)
-  const stops: KmbPlacesResponse["stops"] = []
-  for (const stop of kmbStopsWithin(lng, lat, kmbReachMetres(zoom, lat), STOP_CAP)) {
-    const record = kmbStop(stop.id)
-    if (!record) continue
-    stops.push({
-      id: stop.id,
-      nameTc: record.tc,
-      nameEn: record.en,
-      lng: record.lng,
-      lat: record.lat,
-      routes: kmbRoutesAt(stop.id),
-    })
-  }
-  return { ok: true, stops }
+  return kmbPlacesAt(lng, lat, zoom, wide)
 }
 
-// Poles come from the catalogue. This only refreshes the arrival clock.
-export async function loadKmbNear(lng: number, lat: number, now = Date.now(), zoom = Number.NaN): Promise<KmbResponse> {
-  refreshKmbCatalogueSoon(now)
-  refreshKmbRoutesSoon(now)
-  forgetStale(remembered, now)
-  const nearest = kmbStopsWithin(lng, lat, kmbReachMetres(zoom, lat), STOP_CAP)
-  const turn = await takeEtaTurn(async () => {
-    let missed = 0
-    await pool(nearest.map((stop) => stop.id), FETCH_LIMIT, async (stopId) => {
-      const cached = remembered.get(stopId)
-      if (!etaDue(cached, now)) return
-      const rows = await fetchStop(stopId)
-      if (rows) remembered.set(stopId, { at: now, rows })
-      else missed += 1
-    })
-    return missed
-  })
-  const missed = turn ?? 0
-
-  const stops: KmbStopBoard[] = []
-  for (const stop of nearest) {
+export function kmbPlacesAt(lng: number, lat: number, zoom = Number.NaN, wide = false): KmbPlacesResponse {
+  const stops: KmbPlacesResponse["stops"] = []
+  const radius = kmbReachMetres(zoom, lat)
+  const found = wide ? kmbStopsSpread(lng, lat, radius, SOLO_CAP) : kmbStopsWithin(lng, lat, radius, STOP_CAP)
+  for (const stop of found) {
     const record = kmbStop(stop.id)
     if (!record) continue
-    const rows = heldRows(remembered.get(stop.id), now) ?? []
     stops.push({
       id: stop.id,
       nameTc: record.tc,
@@ -75,17 +43,33 @@ export async function loadKmbNear(lng: number, lat: number, now = Date.now(), zo
       lng: record.lng,
       lat: record.lat,
       routes: kmbRoutesAt(stop.id),
-      calls: callsAt(rows, now),
     })
   }
-  const error = arrivalFailure(missed, stops.map((stop) => stop.calls.length), "KMB arrivals failed")
+  return { ok: true, stops: mergeSamePoles(stops) }
+}
+
+export async function loadKmbNear(lng: number, lat: number, now = Date.now(), zoom = Number.NaN): Promise<KmbResponse> {
+  const places = loadKmbPlaces(lng, lat, now, zoom)
   return {
-    ok: true,
-    ...(error ? { error } : {}),
-    observedAt: new Date(now).toISOString(),
-    stops,
-    cacheable: turn !== null && missed === 0,
+    ok: places.ok,
+    observedAt: null,
+    stops: places.stops.map((stop) => ({ ...stop, calls: [], clock: "waiting" as const })),
+    cacheable: true,
   }
+}
+
+export function loadKmbBoard(id: string, now = Date.now()): Promise<{ ok: true; stop: KmbStopBoard } | { ok: false }> {
+  return loadPoleBoard(`kmb:${id}`, now, {
+    poleIds: () => kmbPoleIds(id),
+    pole: (stopId) => {
+      const record = kmbStop(stopId)
+      if (!record) return null
+      return { tc: record.tc, en: record.en, lng: record.lng, lat: record.lat, routes: kmbRoutesAt(stopId) }
+    },
+    jobs: (stopId) => [stopId],
+    rows: (stopId) => fetchStop(stopId),
+    calls: (_stopId, _job, rows, at) => callsAt(rows, at),
+  })
 }
 
 function callsAt(rows: EtaRow[], now: number): KmbCall[] {
@@ -112,7 +96,7 @@ function callsAt(rows: EtaRow[], now: number): KmbCall[] {
     })
   }
   calls.sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999) || a.route.localeCompare(b.route))
-  return calls.slice(0, 12)
+  return calls
 }
 
 function isScheduled(row: EtaRow): boolean {
@@ -124,18 +108,7 @@ function text(value: unknown): string {
 }
 
 async function fetchStop(stopId: string): Promise<EtaRow[] | null> {
-  try {
-    const response = await etaQueue(() => fetchUpstream(`${ETA_ROOT}/${encodeURIComponent(stopId)}`, ETA_FRESH_MS, {
-      timeoutMs: 5_000,
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
-      },
-    }))
-    if (response.status !== 200) return null
-    const body = JSON.parse(new TextDecoder().decode(response.body)) as { data?: EtaRow[] }
-    return Array.isArray(body.data) ? body.data : []
-  } catch {
-    return null
-  }
+  const body = await readEtaJson<{ data?: EtaRow[] }>(`${ETA_ROOT}/${encodeURIComponent(stopId)}`)
+  if (!body) return null
+  return Array.isArray(body.data) ? body.data : []
 }
