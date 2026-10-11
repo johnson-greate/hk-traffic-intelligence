@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url"
 const ROOT = "https://data.etagmb.gov.hk"
 const HEADERS = {
   Accept: "application/json",
-  "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
+  "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)",
 }
 const REGIONS = ["HKI", "KLN", "NT"]
 const GAP_MS = 3_000

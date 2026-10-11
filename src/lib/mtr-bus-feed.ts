@@ -102,7 +102,7 @@ async function readSchedule(route: string): Promise<unknown | null> {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
+          "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)",
         },
         body: JSON.stringify({ language: "zh", routeName: route }),
         signal: AbortSignal.timeout(8_000),

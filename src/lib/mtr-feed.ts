@@ -129,7 +129,7 @@ async function fetchPair(line: string, station: string) {
       timeoutMs: 5_000,
       headers: {
         Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
+        "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)",
       },
     })
     if (response.status === 429) {

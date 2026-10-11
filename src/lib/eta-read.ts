@@ -4,7 +4,7 @@ import { fetchUpstream } from "@/lib/upstream"
 
 const ETA_HEADERS = {
   Accept: "application/json",
-  "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
+  "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)",
 }
 
 export async function readEtaJson<T>(url: string, blank: T | null = null): Promise<T | null> {
