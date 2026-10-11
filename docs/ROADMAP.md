@@ -73,5 +73,6 @@
 - 英文介面在手機闊度下，頂部語言切換按鈕右邊被裁走少許（原有問題）。
 - 免費計劃：交通 JSON 間中喺傳送途中被截斷（`Unterminated string in JSON at position …`），係 CPU 超標被 Cloudflare 停止。2026-10-05 搬到 Workers Paid 後應已解決。
 - 已向原作者提交 5 個 PR（keithligh/hk-traffic-intelligence #3 至 #7），2026-10-04 全部被 close：佢唔要 AI 層同純外觀改動，lint 改動佢自己加。
+- 原作者喺 2026-10-04 重寫咗 history（force push），新 root `24e0f51` 同我哋上次同步嘅 `476fd92` 冇共同祖先。下次同步要先喺本機 `git replace --graft 24e0f51 476fd92` 再 merge。佢刪咗 `scripts/deploy-main.mjs`，我哋嘅 `deploy:vinext` 仲用緊，merge 時要保留。計劃見 [handover 2026-10-10](handover/handover_20261010_0945.md)。
 - 新 Worker 啱啱啟動、快取未有數據時，問答讀唔到隧道數據，會用另一個起點作答，而且冇「頂部列顯示緊另一個路口」嘅提示。
 - `hktraffic.brian-361.workers.dev` 喺設定咗自訂域名之後被 Cloudflare 自動停用（error 1042），只可用 traffic.resource.hk。
