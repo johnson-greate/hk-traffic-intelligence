@@ -8,7 +8,7 @@ const ROOT = "https://data.etabus.gov.hk/v1/transport/kmb/route-stop"
 const response = await fetch(ROOT, {
   headers: {
     Accept: "application/json",
-    "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
+    "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)",
   },
 })
 if (!response.ok) throw new Error(`route-stop ${response.status}`)

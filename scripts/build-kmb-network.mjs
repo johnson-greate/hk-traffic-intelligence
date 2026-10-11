@@ -7,7 +7,7 @@ import { writeFile } from "node:fs/promises"
 const ROOT = "https://data.etabus.gov.hk/v1/transport/kmb"
 const HEADERS = {
   Accept: "application/json",
-  "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
+  "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)",
 }
 
 async function load(path) {

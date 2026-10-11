@@ -81,7 +81,7 @@ async function fetchStation(stationId: string, now: number): Promise<Parsed | nu
       timeoutMs: 5_000,
       headers: {
         Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)",
+        "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)",
       },
     })
     if (response.status !== 200) return null

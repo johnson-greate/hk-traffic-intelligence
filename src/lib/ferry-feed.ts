@@ -198,7 +198,7 @@ async function fetchSun(route: (typeof SUN_ROUTES)[number]): Promise<SunFix | nu
   try {
     const response = await etaQueue(() => fetchUpstream(`https://www.sunferry.com.hk/eta/?route=${encodeURIComponent(route.code)}`, ETA_FRESH_MS, {
       timeoutMs: 8_000,
-      headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)" },
+      headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)" },
     }))
     if (response.status !== 200) return null
     const body = JSON.parse(new TextDecoder().decode(response.body)) as { data?: Record<string, unknown>[] }
@@ -264,7 +264,7 @@ async function fetchHkkf(route: (typeof HKKF_ROUTES)[number], direction: "inboun
   try {
     const response = await etaQueue(() => fetchUpstream(`https://www.hkkfeta.com/opendata/eta/${route.id}/${direction}`, ETA_FRESH_MS, {
       timeoutMs: 8_000,
-      headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)" },
+      headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)" },
     }))
     if (response.status !== 200) return null
     const body = JSON.parse(new TextDecoder().decode(response.body)) as { data?: Record<string, unknown>[] }
@@ -340,7 +340,7 @@ async function rememberFortune(now: number): Promise<void> {
         const url = `https://www.fortuneferry.com.hk/zh/route-and-fare?route=3&origin=${leg.origin}&destination=${leg.destination}&departure_date=${date}`
         const response = await etaQueue(() => fetchUpstream(url, 60 * 60 * 1000, {
           timeoutMs: 15_000,
-          headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://hktraffic.keith-li.workers.dev)" },
+          headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; HKTrafficIntelligence/1.0; +https://traffic.resource.hk)" },
         }))
         if (response.status !== 200) continue
         pages.push({ pierId: leg.pierId, destTc: leg.destTc, destEn: leg.destEn, html: new TextDecoder().decode(response.body) })
