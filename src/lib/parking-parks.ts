@@ -45,6 +45,24 @@ export function parkLists<T extends ParkingPark>(
   }
 }
 
+export function carPinsWhenBoth<T extends { id: string; cars: number | null }>(
+  parks: readonly T[],
+  motorcycleOn: boolean,
+  motorcycleIds: ReadonlySet<string>,
+): T[] {
+  if (!motorcycleOn) return [...parks]
+  return parks.filter((park) => park.cars != null || !motorcycleIds.has(park.id))
+}
+
+export function motorcyclePinsWhenBoth<T extends { id: string }>(
+  motorcycles: readonly T[],
+  parkingOn: boolean,
+  carIds: ReadonlySet<string>,
+): T[] {
+  if (!parkingOn) return [...motorcycles]
+  return motorcycles.filter((park) => !carIds.has(park.id))
+}
+
 export function parksNear<T extends ParkingPark>(parks: readonly T[], lng: number, lat: number, radiusM: number, cap = PARK_CAP): T[] {
   const near = parks.flatMap((park) => {
     const metres = metresBetween(lng, lat, park.lng, park.lat)
@@ -278,24 +296,40 @@ function heightOf(value: unknown): number | null {
 }
 
 function sameSite(left: ParkingPark, right: ParkingPark): boolean {
-  const name = compact(left.nameTc) || compact(left.nameEn)
-  const other = compact(right.nameTc) || compact(right.nameEn)
+  const name = siteStem(left)
+  const other = siteStem(right)
   if (!name || name !== other) return false
   return metresBetween(left.lng, left.lat, right.lng, right.lat) <= SAME_SITE_M
 }
 
+function siteStem(park: ParkingPark): string {
+  const source = park.nameTc || park.nameEn
+  return source
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/停車場|車場|泊車場|carpark|car park/g, "")
+}
+
 function preferPark(left: ParkingPark, right: ParkingPark): ParkingPark {
+  const chosen = departmentRow(left, right)
+  const other = chosen === left ? right : left
+  if ((chosen.heightM == null || chosen.heightM <= 0) && other.heightM != null && other.heightM > 0) {
+    return { ...chosen, heightM: other.heightM }
+  }
+  return chosen
+}
+
+function departmentRow(left: ParkingPark, right: ParkingPark): ParkingPark {
+  const leftDepartment = left.id.startsWith("td")
+  const rightDepartment = right.id.startsWith("td")
+  if (leftDepartment && !rightDepartment) return left
+  if (rightDepartment && !leftDepartment) return right
   const leftHeight = left.heightM ?? 0
   const rightHeight = right.heightM ?? 0
   if (leftHeight > 0 && rightHeight <= 0) return left
   if (rightHeight > 0 && leftHeight <= 0) return right
-  if (left.id.startsWith("td") && !right.id.startsWith("td")) return left
-  if (right.id.startsWith("td") && !left.id.startsWith("td")) return right
   return left.id < right.id ? left : right
-}
-
-function compact(value: string): string {
-  return value.replace(/\s+/g, "")
 }
 
 function firstReading(value: unknown): Record<string, unknown> | null {

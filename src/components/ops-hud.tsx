@@ -7,7 +7,7 @@ import { useI18n } from "@/components/locale"
 import { boundaryGlance } from "@/lib/control-points"
 import { crossingsFrom, nearestApproach } from "@/lib/crossings"
 import { displayText, formatClock, LOCALE_MARK, LOCALES, type Messages } from "@/lib/i18n"
-import { CHANGELOG, changelogText } from "@/lib/changelog"
+import { CHANGELOG, changelogIsFresh, changelogText } from "@/lib/changelog"
 import type { BoardFault } from "@/lib/board-status"
 import { layerForIntel } from "@/lib/intel-focus"
 import { firstOpenBoundary, INTEL_TABS, intelBoard, type IntelItem, type IntelTab } from "@/lib/intel"
@@ -62,6 +62,26 @@ const BAR_KEY = {
   WH: "western",
 } as const
 
+function FreshDot() {
+  return <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[#3DDC97]" />
+}
+
+const FOLD_MS = 280
+
+function motionDelay(): number {
+  if (typeof window === "undefined") return 0
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : FOLD_MS
+}
+
+function UpdatesMark({ fresh, label }: { fresh: boolean; label: string }) {
+  return (
+    <>
+      {fresh ? <FreshDot /> : null}
+      {label}
+    </>
+  )
+}
+
 export function OpsHud(props: OpsHudProps) {
   const { locale, setLocale, messages: m } = useI18n()
   const clock = useHongKongClock(locale)
@@ -73,6 +93,40 @@ export function OpsHud(props: OpsHudProps) {
   const pinnedOrigin = prefs.pinnedOrigin
   const setPinnedOrigin = (next: string | null) => updatePreference({ pinnedOrigin: next })
   const open = props.open
+  const [boxOpen, setBoxOpen] = useState(open)
+  const [heldList, setHeldList] = useState<number | null>(null)
+  const layoutEpoch = useRef(0)
+  useEffect(() => {
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- opening shows the box at once; closing waits for the fold
+      setBoxOpen(true)
+      return
+    }
+    if (motionDelay() === 0) {
+      setBoxOpen(false)
+      setHeldList(null)
+      return
+    }
+    const panel = document.querySelector<HTMLElement>(".intel-panel-fold")
+    let finished = false
+    const finish = () => {
+      if (finished) return
+      finished = true
+      setBoxOpen(false)
+      setHeldList(null)
+    }
+    const onEnd = (event: TransitionEvent) => {
+      if (event.target !== panel || event.propertyName !== "grid-template-rows") return
+      finish()
+    }
+    panel?.addEventListener("transitionend", onEnd)
+    const id = window.setTimeout(finish, FOLD_MS + 40)
+    return () => {
+      finished = true
+      panel?.removeEventListener("transitionend", onEnd)
+      window.clearTimeout(id)
+    }
+  }, [open])
   const approachPoints = props.approaches?.ok ? props.approaches.points : []
   const nearest = nearestApproach(approachPoints, props.view)
   const pinned = pinnedOrigin ? approachPoints.find((point) => point.id === pinnedOrigin) ?? null : null
@@ -83,6 +137,7 @@ export function OpsHud(props: OpsHudProps) {
   const summary = props.traffic?.ok ? props.traffic.summary : null
   const totalBands = summary ? summary.free + summary.slow + summary.congested : 0
   const live = Boolean(summary) && !props.trafficError
+  const updatesFresh = changelogIsFresh(CHANGELOG)
   const board = intelBoard({
     trafficError: props.trafficError,
     traffic: props.traffic,
@@ -121,6 +176,17 @@ export function OpsHud(props: OpsHudProps) {
   const worstHall = firstOpenBoundary(board.boundary)
   const changeOpen = (next: boolean) => {
     if (next === open) return
+    const list = document.getElementById("harbour-intel-list")
+    if (!next && list) {
+      const height = Math.ceil(list.getBoundingClientRect().height)
+      if (height > 0) {
+        list.style.maxHeight = `${height}px`
+        setHeldList(height)
+      }
+    } else if (list) {
+      list.style.maxHeight = ""
+      setHeldList(null)
+    }
     props.onOpenChange(next)
   }
   const show = (next: IntelTab, item: IntelItem | undefined) => {
@@ -130,6 +196,7 @@ export function OpsHud(props: OpsHudProps) {
   }
   useEffect(() => {
     const root = document.documentElement
+    const epoch = ++layoutEpoch.current
     const apply = () => {
       const narrow = window.matchMedia(INTEL_PHONE_QUERY).matches
       const attrib = document.querySelector<HTMLElement>(".maplibregl-ctrl-attrib")
@@ -166,12 +233,12 @@ export function OpsHud(props: OpsHudProps) {
         const minTop = Math.ceil(headerBox.bottom + (narrow ? zoomH + dockH + 28 : 8))
         const available = window.innerHeight - bottomGap - minTop - aboveList
         root.style.setProperty("--intel-list-max", `${Math.max(72, Math.floor(available))}px`)
-      } else {
+      } else if (!boxOpen) {
         root.style.removeProperty("--intel-list-max")
         root.style.removeProperty("--intel-bottom")
       }
       const panelBox = panel?.getBoundingClientRect()
-      if (narrow && open && panelBox && panelBox.height > 80 && panelBox.top > 80) {
+      if (narrow && boxOpen && panelBox && panelBox.height > 80 && panelBox.top > 80) {
         root.style.setProperty("--map-dock-bottom", `${Math.ceil(window.innerHeight - panelBox.top + 8)}px`)
       } else {
         root.style.removeProperty("--map-dock-bottom")
@@ -206,14 +273,17 @@ export function OpsHud(props: OpsHudProps) {
       observer.disconnect()
       mutations.disconnect()
       window.removeEventListener("resize", apply)
-      root.style.removeProperty("--map-control-top")
-      root.style.removeProperty("--map-dock-bottom")
-      root.style.removeProperty("--intel-list-max")
-      root.style.removeProperty("--intel-bottom")
-      root.style.removeProperty("--marquee-bottom")
-      root.style.removeProperty("--dock-closed-bottom")
+      queueMicrotask(() => {
+        if (layoutEpoch.current !== epoch) return
+        root.style.removeProperty("--map-control-top")
+        root.style.removeProperty("--map-dock-bottom")
+        root.style.removeProperty("--intel-list-max")
+        root.style.removeProperty("--intel-bottom")
+        root.style.removeProperty("--marquee-bottom")
+        root.style.removeProperty("--dock-closed-bottom")
+      })
     }
-  }, [barOpen, locale, open, props.mapLive])
+  }, [barOpen, boxOpen, locale, open, props.mapLive])
   return (
     <div className="@container/hud pointer-events-none absolute inset-0 z-[5]">
       <Fold open={!barOpen} className="pointer-events-auto absolute top-2 left-2 z-[6] sm:hidden">
@@ -264,9 +334,9 @@ export function OpsHud(props: OpsHudProps) {
             type="button"
             aria-expanded={open && tab === "notes"}
             onClick={() => show("notes", undefined)}
-            className="hidden shrink-0 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 sm:inline-flex"
+            className="hidden shrink-0 items-center gap-1.5 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 sm:inline-flex"
           >
-            {m.changelog}
+            <UpdatesMark fresh={updatesFresh} label={m.changelog} />
           </button>
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -357,9 +427,9 @@ export function OpsHud(props: OpsHudProps) {
             type="button"
             aria-expanded={open && tab === "notes"}
             onClick={() => show("notes", undefined)}
-            className="shrink-0 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 sm:hidden"
+            className="inline-flex shrink-0 items-center gap-1.5 border border-cyan-200/50 bg-cyan-300/10 px-2 py-1 font-[family-name:var(--font-hud)] text-[0.65rem] tracking-[0.12em] text-cyan-50 sm:hidden"
           >
-            {m.changelog}
+            <UpdatesMark fresh={updatesFresh} label={m.changelog} />
           </button>
           </div>
           <button
@@ -397,14 +467,14 @@ export function OpsHud(props: OpsHudProps) {
       <section
         id="harbour-intel"
         data-map-chrome="panel"
-        data-intel-open={props.choice === null ? undefined : props.choice ? "true" : "false"}
+        data-intel-open={boxOpen ? "true" : props.choice === null ? undefined : "false"}
         className={
-          open
+          boxOpen
             ? "pointer-events-auto absolute right-3 bottom-[var(--intel-bottom,6rem)] z-[6] w-[min(22rem,calc(100%-1.5rem))] border border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:bottom-36 lg:right-4 lg:bottom-14"
             : "pointer-events-auto absolute inset-x-0 bottom-[var(--marquee-bottom,3.5rem)] z-[6] border-t border-cyan-200/30 bg-[#041018]/88 shadow-[0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-md sm:bottom-14"
         }
       >
-        <Fold open={!open} className="intel-strip-fold">
+        <Fold open={!boxOpen} className="intel-strip-fold">
         <div className="intel-strip items-center gap-1 px-1.5 py-1">
           <span className="shrink-0 font-[family-name:var(--font-hud)] text-[0.62rem] tracking-[0.14em] text-cyan-100/70 uppercase">
             {tabLabel("ranked", m)}
@@ -448,6 +518,7 @@ export function OpsHud(props: OpsHudProps) {
                     }`}
                   >
                     {tabLabel(id, m)}
+                    {id === "notes" && updatesFresh ? <FreshDot /> : null}
                     {urgent ? <span className="size-1 rounded-full bg-[#FF5D73]" /> : null}
                   </button>
                 )
@@ -468,6 +539,7 @@ export function OpsHud(props: OpsHudProps) {
             id="harbour-intel-list"
             role="tabpanel"
             aria-labelledby={`intel-tab-${tab}`}
+            style={heldList ? { maxHeight: heldList } : undefined}
             className="intel-scroll max-h-[min(26rem,46dvh,var(--intel-list-max,100dvh))] overflow-y-auto border-t border-white/10 px-2 py-2"
           >
             {tab === "notes" ? (

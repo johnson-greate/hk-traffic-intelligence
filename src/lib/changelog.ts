@@ -6,12 +6,153 @@ export type ChangelogEntry = {
   id: string
   date: string
   kind: ChangelogKind
+  at?: string
   en: string
   tc: string
   sc: string
 }
 
 export const CHANGELOG: readonly ChangelogEntry[] = [
+  {
+    id: "2026-10-12-huanggang-pin",
+    date: "2026-10-12",
+    at: "2026-10-12T04:58:00Z",
+    kind: "fixed",
+    en: "The Huanggang pin sits on the new joint-inspection building, north of the river.",
+    tc: "皇崗的點放在新聯檢大樓，深圳河以北。",
+    sc: "皇岗的点放在新联检大楼，深圳河以北。",
+  },
+  {
+    id: "2026-10-12-huanggang",
+    date: "2026-10-12",
+    at: "2026-10-12T04:45:00Z",
+    kind: "fixed",
+    en: "The boundary list shows Huanggang. Lok Ma Chau passenger clearance has stopped.",
+    tc: "管制站顯示皇崗。落馬洲旅檢已經停止。",
+    sc: "管制站显示皇岗。落马洲旅检已经停止。",
+  },
+  {
+    id: "2026-10-12-card-kind",
+    date: "2026-10-12",
+    at: "2026-10-11T18:05:00Z",
+    kind: "fixed",
+    en: "Every place card names what it is, in the same words as its layer. A meter card says Meters.",
+    tc: "每個地點卡都用圖層的名稱寫明它是什麼。咪錶卡寫明咪錶。",
+    sc: "每个地点卡都用图层的名称写明它是什么。咪表卡写明咪表。",
+  },
+  {
+    id: "2026-10-11-layer-close",
+    date: "2026-10-11",
+    at: "2026-10-11T16:13:11Z",
+    kind: "fixed",
+    en: "Closing the layer bar shortens it. It does not shoot upward first.",
+    tc: "收起圖層列時，名單在原位縮短，不會先衝高。",
+    sc: "收起图层列时，名单在原位缩短，不会先冲高。",
+  },
+  {
+    id: "2026-10-11-intel-close-lift",
+    date: "2026-10-11",
+    kind: "fixed",
+    en: "Closing the intel card no longer lifts it before it shortens.",
+    tc: "收起情報卡時，卡片不再先升高。",
+    sc: "收起情报卡时，卡片不再先升高。",
+  },
+  {
+    id: "2026-10-11-intel-close",
+    date: "2026-10-11",
+    kind: "fixed",
+    en: "Closing the intel card shortens it where it stands.",
+    tc: "收起情報卡時，卡片在原位縮短。",
+    sc: "收起情报卡时，卡片在原位缩短。",
+  },
+  {
+    id: "2026-10-11-updates-tab",
+    date: "2026-10-11",
+    kind: "added",
+    en: "The Updates tab on the intel card shows the same dot.",
+    tc: "情報卡的「更新」分頁顯示同一點。",
+    sc: "情报卡的「更新」分页显示同一点。",
+  },
+  {
+    id: "2026-10-11-updates-dot",
+    date: "2026-10-11",
+    kind: "added",
+    en: "Updates shows a dot for 24 hours after a line is added.",
+    tc: "新項目加入後的 24 小時內，「更新」顯示一點。",
+    sc: "新项目加入后的 24 小时内，「更新」显示一点。",
+  },
+  {
+    id: "2026-10-11-jordan-track",
+    date: "2026-10-11",
+    kind: "fixed",
+    en: "The Tsuen Wan line leaves Jordan toward Tsim Sha Tsui without stepping back toward Yau Ma Tei.",
+    tc: "荃灣綫從佐敦往尖沙咀，不再先折返油麻地方向。",
+    sc: "荃湾线从佐敦往尖沙咀，不再先折返油麻地方向。",
+  },
+  {
+    id: "2026-10-11-car-count-first",
+    date: "2026-10-11",
+    kind: "fixed",
+    en: "A car park with both a private-car count and a motorcycle count shows the private-car count on its pin.",
+    tc: "同時公布私家車和電單車空位的停車場，標籤顯示私家車空位。",
+    sc: "同时公布私家车和电单车空位的停车场，标签显示私家车空位。",
+  },
+  {
+    id: "2026-10-11-sweep-pins",
+    date: "2026-10-11",
+    kind: "fixed",
+    en: "Bus stops and motorcycle parks stay off the last frame of the opening sweep, with the car parks and meters.",
+    tc: "開場的最後一幕不顯示巴士站和電單車停車場，與停車場和咪錶一樣。",
+    sc: "开场的最后一幕不显示巴士站和电单车停车场，与停车场和咪表一样。",
+  },
+  {
+    id: "2026-10-11-one-park-pin",
+    date: "2026-10-11",
+    kind: "fixed",
+    en: "A car park the list publishes twice appears as one pin. The free-space count is the Transport Department number.",
+    tc: "名單上出現兩次的停車場，地圖只顯示一個。空位數目用運輸署的數字。",
+    sc: "名单上出现两次的停车场，地图只显示一个。空位数目用运输署的数字。",
+  },
+  {
+    id: "2026-10-11-flyover-places",
+    date: "2026-10-11",
+    kind: "fixed",
+    en: "Car parks and meters stay off the last frame of the opening sweep. They appear when you move half a level closer.",
+    tc: "開場的最後一幕不顯示停車場和咪錶。再拉近半級才出現。",
+    sc: "开场的最后一幕不显示停车场和咪表。再拉近半级才出现。",
+  },
+  {
+    id: "2026-10-11-hosted-charger-free",
+    date: "2026-10-11",
+    kind: "fixed",
+    en: "A car park that contains a charger shows the free plugs and the free car spaces.",
+    tc: "同一個停車場的充電站，空置插頭與空置車位一同顯示。",
+    sc: "同一个停车场的充电站，空置插头与空置车位一同显示。",
+  },
+  {
+    id: "2026-10-10-charger-card-align",
+    date: "2026-10-10",
+    kind: "fixed",
+    en: "The free count on a charger card lines up with the plug counts.",
+    tc: "充電站卡片的空置數目與插頭數目對齊。",
+    sc: "充电站卡片的空置数目与插头数目对齐。",
+  },
+  {
+    id: "2026-10-10-charger-card-free",
+    date: "2026-10-10",
+    kind: "fixed",
+    en: "A charger card shows how many plugs are free, the same number as its pin.",
+    tc: "充電站卡片顯示與標籤相同的空置數目。",
+    sc: "充电站卡片显示与标签相同的空置数目。",
+  },
+  {
+    id: "2026-10-10-share",
+    date: "2026-10-10",
+    kind: "added",
+    en: "The board can share its address.",
+    tc: "可以分享這個版面的網址。",
+    sc: "可以分享这个版面的网址。",
+  },
   {
     id: "2026-10-09-journey-name",
     date: "2026-10-09",
@@ -781,6 +922,32 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
     sc: "三条过海隧道显示实时分钟。",
   },
 ]
+
+const HONG_KONG = "Asia/Hong_Kong"
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export function changelogDayKey(now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: HONG_KONG,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now)
+}
+
+export function changelogPublishedAt(entry: { date: string; at?: string }): number {
+  if (entry.at) return Date.parse(entry.at)
+  return Date.parse(`${entry.date}T00:00:00+08:00`)
+}
+
+export function changelogIsFresh(entries: readonly { date: string; at?: string }[], now = new Date()): boolean {
+  const newest = entries[0]
+  if (!newest) return false
+  const published = changelogPublishedAt(newest)
+  if (Number.isNaN(published)) return false
+  const age = now.getTime() - published
+  return age >= 0 && age < DAY_MS
+}
 
 export function changelogText(entry: ChangelogEntry, locale: Locale): string {
   switch (locale) {

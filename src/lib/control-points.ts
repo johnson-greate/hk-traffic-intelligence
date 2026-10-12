@@ -1,14 +1,14 @@
 import type { Messages } from "@/lib/i18n"
 import type { SpeedBand } from "@/lib/types"
 
-export type ControlPointCode = "HYW" | "HZM" | "LMC" | "LSC" | "LWS" | "MKT" | "SBC" | "STK"
+export type ControlPointCode = "HGP" | "HYW" | "HZM" | "LSC" | "LWS" | "MKT" | "SBC" | "STK"
 
 export type QueueFile = Record<ControlPointCode, { arrQueue: number; depQueue: number }>
 
 const VEHICLE_ROADS: Record<ControlPointCode, string[]> = {
   HYW: ["HEUNG YUEN WAI"],
   HZM: ["TUEN MUN CHEK LAP KOK", "HONG KONG-ZHUHAI-MACAO", "HONG KONG ZHUHAI"],
-  LMC: ["SAN TIN HIGHWAY", "LOK MA CHAU"],
+  HGP: ["SAN TIN HIGHWAY", "LOK MA CHAU"],
   LSC: ["SAN TIN HIGHWAY", "LOK MA CHAU"],
   LWS: [],
   MKT: ["MAN KAM TO"],
@@ -19,7 +19,7 @@ const VEHICLE_ROADS: Record<ControlPointCode, string[]> = {
 const POINTS: { code: ControlPointCode; name: string; coordinates: [number, number] }[] = [
   { code: "HYW", name: "Heung Yuen Wai", coordinates: [114.1516, 22.5592] },
   { code: "HZM", name: "Hong Kong-Zhuhai-Macao Bridge", coordinates: [113.9542, 22.3166] },
-  { code: "LMC", name: "Lok Ma Chau", coordinates: [114.0757, 22.5122] },
+  { code: "HGP", name: "Huanggang", coordinates: [114.06773, 22.52319] },
   { code: "LSC", name: "Lok Ma Chau Spur Line", coordinates: [114.0655, 22.5143] },
   { code: "LWS", name: "Lo Wu", coordinates: [114.1133, 22.5281] },
   { code: "MKT", name: "Man Kam To", coordinates: [114.1291, 22.5376] },
@@ -108,7 +108,7 @@ function rankBand(band: SpeedBand): number {
 }
 
 function textCode(value: unknown): ControlPointCode | null {
-  if (value === "HYW" || value === "HZM" || value === "LMC" || value === "LSC" || value === "LWS" || value === "MKT" || value === "SBC" || value === "STK") {
+  if (value === "HGP" || value === "HYW" || value === "HZM" || value === "LSC" || value === "LWS" || value === "MKT" || value === "SBC" || value === "STK") {
     return value
   }
   return null

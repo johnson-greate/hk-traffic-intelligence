@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useSyncExternalStore } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { useSearchParams } from "next/navigation"
 import { BriefingCard } from "@/components/briefing-card"
 import { CityMap } from "@/components/city-map"
@@ -22,6 +22,7 @@ import { catalogueBoards } from "@/lib/place-arrivals"
 import { layersForIntel } from "@/lib/intel-focus"
 import { INTEL_PHONE_QUERY, intelCardOpen, preferenceServerSnapshot, preferenceSnapshot, soleLayer, subscribePreferences, updatePreference } from "@/lib/preferences"
 import { hkoLang } from "@/lib/i18n"
+import { shareAddress, siteAddress } from "@/lib/share-link"
 import type {
   ApproachesResponse,
   CitybusPlacesResponse,
@@ -67,43 +68,47 @@ export function Dashboard() {
   const [view, setView] = useState<{ lng: number; lat: number; zoom: number } | null>(null)
   const sole = soleLayer(layers)
   const kmbQuery =
-    view && view.zoom >= placePinZoom("kmb", sole)
+    view && view.zoom >= placePinZoom("kmb", sole, basemap)
       ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}`
       : null
   const citybusQuery =
-    view && view.zoom >= placePinZoom("citybus", sole)
+    view && view.zoom >= placePinZoom("citybus", sole, basemap)
       ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}${sole === "citybus" ? `&zoom=${view.zoom.toFixed(2)}&wide=1` : ""}`
       : null
   const kmbPlacesUrl = layers.kmb && kmbQuery ? `/api/kmb/places?${kmbQuery}${sole === "kmb" ? "&wide=1" : ""}` : null
   const citybusPlacesUrl = layers.citybus && citybusQuery ? `/api/citybus/places?${citybusQuery}` : null
   const gmbQuery =
-    view && view.zoom >= placePinZoom("gmb", sole)
+    view && view.zoom >= placePinZoom("gmb", sole, basemap)
       ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}`
       : null
   const gmbPlacesUrl = layers.gmb && gmbQuery ? `/api/gmb/places?${gmbQuery}${sole === "gmb" ? "&wide=1" : ""}` : null
   const nlbQuery =
-    view && view.zoom >= placePinZoom("nlb", sole) && (sole === "nlb" || inLantau(view.lng, view.lat))
+    view && view.zoom >= placePinZoom("nlb", sole, basemap) && (sole === "nlb" || inLantau(view.lng, view.lat))
       ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}${sole === "nlb" ? `&zoom=${view.zoom.toFixed(2)}&wide=1` : ""}`
       : null
   const nlbPlacesUrl = layers.nlb && nlbQuery ? `/api/nlb/places?${nlbQuery}` : null
   const mtrBusQuery =
-    view && view.zoom >= placePinZoom("mtrbus", sole)
+    view && view.zoom >= placePinZoom("mtrbus", sole, basemap)
       ? `lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}`
       : null
   const mtrBusPlacesUrl = layers.mtrbus && mtrBusQuery ? `/api/mtr-bus/places?${mtrBusQuery}${sole === "mtrbus" ? "&wide=1" : ""}` : null
   const parkWide = sole === "parking" || sole === "motorcycle"
+  const parkFloors = [
+    ...(layers.parking ? [placePinZoom("parking", sole, basemap)] : []),
+    ...(layers.motorcycle ? [placePinZoom("motorcycle", sole, basemap)] : []),
+  ]
   const parkPlacesUrl =
-    (layers.parking || layers.motorcycle) && view && view.zoom >= placePinZoom("parking", sole)
+    parkFloors.length > 0 && view && view.zoom >= Math.min(...parkFloors)
       ? `/api/parking/places?lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}${parkWide ? "&wide=1" : ""}`
       : null
   const meterWide = sole === "meter"
   const meterPlacesUrl =
-    layers.meter && view && view.zoom >= placePinZoom("meter", sole)
+    layers.meter && view && view.zoom >= placePinZoom("meter", sole, basemap)
       ? `/api/meters/places?lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}${meterWide ? "&wide=1" : ""}`
       : null
   const chargerWide = sole === "charger"
   const chargerPlacesUrl =
-    layers.charger && view && view.zoom >= placePinZoom("charger", sole)
+    layers.charger && view && view.zoom >= placePinZoom("charger", sole, basemap)
       ? `/api/chargers/places?lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}${chargerWide ? "&wide=1" : ""}`
       : null
   const mtrLive = useLiveJson<MtrResponse>("/api/mtr", 15_000)
@@ -117,7 +122,7 @@ export function Dashboard() {
   const parkPlacesLive = useLiveJson<ParkReadingResponse>(parkPlacesUrl, PARKING_POLL_MS)
   const kerbWide = sole === "kerb"
   const kerbPlacesUrl =
-    layers.kerb && view && view.zoom >= placePinZoom("kerb", sole)
+    layers.kerb && view && view.zoom >= placePinZoom("kerb", sole, basemap)
       ? `/api/kerb/places?lng=${view.lng.toFixed(3)}&lat=${view.lat.toFixed(3)}&zoom=${view.zoom.toFixed(2)}${kerbWide ? "&wide=1" : ""}`
       : null
   const kerbPlacesLive = useLiveJson<KerbPlacesResponse>(kerbPlacesUrl, KERB_POLL_MS)
@@ -252,6 +257,8 @@ export function Dashboard() {
         >
           {m.creditGitHub}
         </a>
+        {" / "}
+        <ShareSite label={m.share} copiedLabel={m.shared} title={m.productName} />
       </p>
       <LayerDock
         layers={layers}
@@ -311,4 +318,30 @@ function subscribeIntelPhone(onChange: () => void) {
 
 function intelPhoneNow(): boolean {
   return window.matchMedia(INTEL_PHONE_QUERY).matches
+}
+
+function ShareSite(props: { label: string; copiedLabel: string; title: string }) {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 2000)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+  return (
+    <button
+      type="button"
+      aria-live="polite"
+      onClick={() => {
+        const url = siteAddress(window.location.href)
+        const share = typeof navigator.share === "function" ? navigator.share.bind(navigator) : undefined
+        const copy = typeof navigator.clipboard?.writeText === "function" ? (value: string) => navigator.clipboard.writeText(value) : undefined
+        void shareAddress(url, props.title, { share, copy }).then((result) => {
+          if (result === "copied") setCopied(true)
+        })
+      }}
+      className="text-cyan-100 underline decoration-cyan-200/60 underline-offset-2"
+    >
+      {copied ? props.copiedLabel : props.label}
+    </button>
+  )
 }
