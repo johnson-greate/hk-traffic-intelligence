@@ -159,6 +159,11 @@
   view-transition-name: harbour-intel;
 }
 
+#harbour-intel:not([data-intel-open="true"]) .intel-strip-fold,
+#harbour-intel:not([data-intel-open="true"]) .intel-strip-fold .fold-clip {
+  transition: none;
+}
+
 .intel-strip {
   display: flex;
 }
@@ -324,7 +329,6 @@
 
 .layer-dock[data-layers-open="false"] .fold {
   grid-template-rows: 0fr;
-  grid-template-columns: 0fr;
   opacity: 0;
   pointer-events: none;
 }
@@ -332,7 +336,6 @@
 @media (max-width: 760px) {
   .layer-dock:not([data-layers-open="true"]) .fold {
     grid-template-rows: 0fr;
-    grid-template-columns: 0fr;
     opacity: 0;
     pointer-events: none;
     transition: none;
@@ -452,6 +455,16 @@ html[data-locale="zh-CN"] .city-card {
 
 .city-card-head {
   padding-right: 32px;
+}
+
+.city-card-kind {
+  margin: 0 0 2px;
+  color: #526170;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .city-card-title {

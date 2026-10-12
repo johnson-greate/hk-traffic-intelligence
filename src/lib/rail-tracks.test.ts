@@ -1,6 +1,14 @@
 import assert from "node:assert/strict"
 import { fractionAlong, lineMetres, pointAlong } from "./rail-geometry.ts"
+import { metresBetween } from "./mtr-estimate.ts"
 import { segmentLength, segmentSpan, useTrackEdges } from "./rail-tracks.ts"
+
+const jordan = { lng: 114.171757, lat: 22.304932 }
+const tst = { lng: 114.172324, lat: 22.297777 }
+const jordanSpan = segmentSpan("JOR", "TST", jordan, tst)
+const next = jordanSpan[1]
+assert.ok(next)
+assert.ok(metresBetween(next, tst) < metresBetween(jordan, tst))
 
 const start = { lng: 114.15, lat: 22.28 }
 const end = { lng: 114.17, lat: 22.28 }

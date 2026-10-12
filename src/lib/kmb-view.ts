@@ -1,19 +1,50 @@
-import type { WatchLayer } from "@/lib/types"
+import type { Basemap, WatchLayer } from "@/lib/types"
 
 export const KMB_MIN_ZOOM = 13
 // One layer on its own can appear from the city view and show more pins than the mixed map.
 export const SOLO_PIN_ZOOM = 10
 // Cameras and free-count pins wait until the harbour frame has been left behind.
 export const AVAILABILITY_MIN_ZOOM = 14
+// The satellite and street sweep ends at 13.05. The buildings sweep never goes below 15.2.
+export const FLYOVER_END_ZOOM = 13.05
+export const BUILDINGS_FLYOVER_ZOOM = 15.2
+export const PARK_METER_ZOOM = 13.55
+export const BUILDINGS_PARK_METER_ZOOM = 15.7
 export const KMB_POLL_MS = 60_000
 export const PLACE_POLL_MS = 12 * 60 * 60 * 1000
 
-const AVAILABILITY_LAYERS = new Set<WatchLayer>(["cameras", "parking", "motorcycle", "meter", "charger"])
-const DOT_LAYERS = new Set<WatchLayer>(["parking", "motorcycle"])
+const AVAILABILITY_LAYERS = new Set<WatchLayer>(["cameras", "charger"])
+const AFTER_SWEEP = new Set<WatchLayer>([
+  "parking",
+  "meter",
+  "motorcycle",
+  "kerb",
+  "kmb",
+  "citybus",
+  "gmb",
+  "nlb",
+  "mtrbus",
+])
 
-export function placePinZoom(layer: WatchLayer, sole: WatchLayer | null): number {
-  if (sole === layer || DOT_LAYERS.has(layer)) return SOLO_PIN_ZOOM
-  if (AVAILABILITY_LAYERS.has(layer)) return AVAILABILITY_MIN_ZOOM
+export function parkMeterZoom(basemap: Basemap): number {
+  switch (basemap) {
+    case "buildings":
+      return BUILDINGS_PARK_METER_ZOOM
+    case "street":
+    case "satellite":
+      return PARK_METER_ZOOM
+    default: {
+      const exhaustive: never = basemap
+      return exhaustive
+    }
+  }
+}
+
+export function placePinZoom(layer: WatchLayer, sole: WatchLayer | null, basemap: Basemap = "satellite"): number {
+  if (sole === layer) return SOLO_PIN_ZOOM
+  const pastSweep = parkMeterZoom(basemap)
+  if (AFTER_SWEEP.has(layer)) return pastSweep
+  if (AVAILABILITY_LAYERS.has(layer)) return Math.max(AVAILABILITY_MIN_ZOOM, pastSweep)
   return KMB_MIN_ZOOM
 }
 

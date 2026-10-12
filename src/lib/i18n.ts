@@ -134,6 +134,8 @@ export type Messages = {
   creditBy: string
   creditLinkedIn: string
   creditGitHub: string
+  share: string
+  shared: string
   satellite: string
   streets: string
   buildings: string
@@ -237,6 +239,7 @@ export type Messages = {
   plateFree: string
   parkingAsOf: (count: string, time: string) => string
   parkingHeight: (n: number) => string
+  journeyTime: string
   meter: string
   meterFailed: string
   meterGeneral: string
@@ -359,6 +362,8 @@ const en: Messages = {
   creditBy: "Created by: Keith Li -",
   creditLinkedIn: "LinkedIn",
   creditGitHub: "GitHub",
+  share: "Share",
+  shared: "Copied",
   satellite: "Satellite",
   streets: "Streets",
   buildings: "Buildings",
@@ -462,6 +467,7 @@ const en: Messages = {
   plateFree: "free",
   parkingAsOf: (count, time) => `${count} at ${time}`,
   parkingHeight: (n) => `Height limit ${n} m`,
+  journeyTime: "Journey time",
   meter: "Meters",
   meterFailed: "Meters did not load.",
   meterGeneral: "Private car / light van",
@@ -584,6 +590,8 @@ const zhHK: Messages = {
   creditBy: "製作：Keith Li -",
   creditLinkedIn: "LinkedIn",
   creditGitHub: "GitHub",
+  share: "分享",
+  shared: "已複製",
   satellite: "衛星",
   streets: "街道",
   buildings: "樓宇",
@@ -687,6 +695,7 @@ const zhHK: Messages = {
   plateFree: "空位",
   parkingAsOf: (count, time) => `${count}（${time}）`,
   parkingHeight: (n) => `限高 ${n} 米`,
+  journeyTime: "行車時間",
   meter: "咪錶",
   meterFailed: "未能載入咪錶。",
   meterGeneral: "私家車／輕型貨車",
@@ -805,6 +814,8 @@ const zhCN: Messages = {
   creditBy: "制作：Keith Li -",
   creditLinkedIn: "LinkedIn",
   creditGitHub: "GitHub",
+  share: "分享",
+  shared: "已复制",
   satellite: "卫星",
   streets: "街道",
   buildings: "楼宇",
@@ -902,6 +913,7 @@ const zhCN: Messages = {
   plateFree: "空位",
   parkingAsOf: (count, time) => `${count}（${time}）`,
   parkingHeight: (n) => `限高 ${n} 米`,
+  journeyTime: "行车时间",
   meter: "咪表",
   meterFailed: "未能载入咪表。",
   meterGeneral: "私家车／轻型货车",
@@ -937,7 +949,7 @@ const CONTROL_NAMES: Record<Locale, Record<string, string>> = {
   en: {
     HYW: "Heung Yuen Wai",
     HZM: "Hong Kong-Zhuhai-Macao Bridge",
-    LMC: "Lok Ma Chau",
+    HGP: "Huanggang",
     LSC: "Lok Ma Chau Spur Line",
     LWS: "Lo Wu",
     MKT: "Man Kam To",
@@ -947,7 +959,7 @@ const CONTROL_NAMES: Record<Locale, Record<string, string>> = {
   "zh-HK": {
     HYW: "香園圍",
     HZM: "港珠澳大橋",
-    LMC: "落馬洲",
+    HGP: "皇崗",
     LSC: "落馬洲支線",
     LWS: "羅湖",
     MKT: "文錦渡",
@@ -957,7 +969,7 @@ const CONTROL_NAMES: Record<Locale, Record<string, string>> = {
   "zh-CN": {
     HYW: "香园围",
     HZM: "港珠澳大桥",
-    LMC: "落马洲",
+    HGP: "皇岗",
     LSC: "落马洲支线",
     LWS: "罗湖",
     MKT: "文锦渡",
