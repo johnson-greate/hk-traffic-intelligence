@@ -41,6 +41,21 @@ assert.equal(
 assert.ok(typeof readAnswer(answer({ answerable: true, answer: "皇后大道東擠塞。", basis: ["Congested roads, longest first: ... 皇后大道東 Queen's Road East 0.5 km, slowest 9 km/h"] }), listFacts) === "object")
 assert.ok(typeof readAnswer(answer({ answerable: true, answer: "皇后大道東擠塞。", basis: ["Congested roads, longest first: 連翔道 Lin Cheung Road 0.8 km, slowest 16 km/h… 皇后大道東 Queen's Road East 0.5 km"] }), listFacts) === "object")
 
+// "Fastest" must be the tunnel the facts name fastest for the start the answer quotes.
+const kowloon = "Harbour crossing times from 加士居道東行近香港理工大學 (Gascoigne Road eastbound near the Hong Kong Polytechnic University): Cross-Harbour Tunnel (紅隧) 14 min, Eastern Harbour Crossing (東隧) 13 min; fastest: Eastern Harbour Crossing (東隧)"
+const kowloonFacts = [facts, kowloon].join("\n")
+const quote = (text: string, basis = [kowloon]) => readAnswer(answer({ answerable: true, answer: text, basis }), kowloonFacts)
+assert.equal(quote("最近起點是加士居道東行近香港理工大學，最快為紅隧，需14分鐘。"), "wrong fastest tunnel: CH, facts say EH")
+assert.equal(quote("From Gascoigne Road, the Cross-Harbour Tunnel is fastest at 14 minutes."), "wrong fastest tunnel: CH, facts say EH")
+assert.equal(quote("最快为红隧，需14分钟。"), "wrong fastest tunnel: CH, facts say EH", "simplified names")
+assert.ok(typeof quote("由加士居道出發，東隧最快，13 分鐘；紅隧 14 分鐘。") === "object")
+assert.ok(typeof quote("紅隧 14 分鐘，東隧 13 分鐘最快。") === "object", "the claim goes with the nearest tunnel")
+assert.ok(typeof quote("紅隧需14分鐘，東隧需13分鐘。") === "object", "no fastest claim, nothing to check")
+assert.ok(typeof quote("東區海底隧道最快，13 分鐘。") === "object", "a full name containing 海底隧道 is still the EHC")
+assert.equal(quote("海底隧道最快。"), "wrong fastest tunnel: CH, facts say EH")
+// A quote that leaves the fastest item out is still checked against the full line in the facts.
+assert.equal(quote("最快為紅隧。", [kowloon.split(";")[0]]), "wrong fastest tunnel: CH, facts say EH")
+
 // Declining needs no basis.
 assert.deepEqual(readAnswer(answer({ answerable: false, answer: "我只能回答香港即時交通。", basis: [] }), facts), {
   answerable: false,
