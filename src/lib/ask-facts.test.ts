@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { askFacts, otherSign } from "./ask-facts.ts"
+import { askFacts, fastestCodes, otherSign } from "./ask-facts.ts"
 import type { AskInput } from "./ask-facts.ts"
 
 const leg = (code: string, minutes: number | null) => ({ code, name: code, nameTc: code, minutes, colour: "green" as const })
@@ -41,7 +41,7 @@ const facts = askFacts(input).split("\n")
 
 assert.equal(facts[0], "Time: 2026-10-04 09:30 Hong Kong time")
 // Every start with a published time gets its own line, so a question about one start can be answered.
-assert.ok(facts.includes("Harbour crossing times from 告士打道東行近稅務大樓 (Gloucester Road eastbound near Revenue Tower): Cross-Harbour Tunnel (紅隧) 7 min, Eastern Harbour Crossing (東隧) 9 min"))
+assert.ok(facts.includes("Harbour crossing times from 告士打道東行近稅務大樓 (Gloucester Road eastbound near Revenue Tower): Cross-Harbour Tunnel (紅隧) 7 min, Eastern Harbour Crossing (東隧) 9 min; fastest: Cross-Harbour Tunnel (紅隧)"))
 assert.ok(!facts.some((line) => line.includes("啓祥道西行")), "a start with no published time is left out")
 assert.ok(facts.includes("Congested roads, longest first: 窩打老道 Waterloo Road 3.9 km, slowest 9 km/h; 告士打道 Gloucester Road 1.5 km, slowest 6 km/h"))
 assert.ok(facts.includes("Open traffic incidents: 交通意外 Traffic accident at 青雲路 Tsing Wan Road"))
@@ -75,6 +75,17 @@ const empty = askFacts({ ...input, traffic: null, starts: [], halls: null })
 assert.match(empty, /Road network: no reading/)
 assert.match(empty, /Harbour crossing times: no reading/)
 assert.match(empty, /Boundary control points: no reading/)
+
+// The fastest tunnel is worked out in code: the model once called the 14-minute tunnel fastest
+// next to a 13-minute one. A tie names both.
+const fastestLine = (legs: ReturnType<typeof leg>[]) =>
+  askFacts({ ...input, starts: [{ id: "K02", name: "Gascoigne Road eastbound", nameTc: "加士居道東行", coordinates: [0, 0], legs }] })
+    .split("\n")
+    .find((line) => line.startsWith("Harbour crossing times from 加士居道東行"))
+assert.equal(fastestLine([leg("CH", 14), leg("EH", 13)]), "Harbour crossing times from 加士居道東行 (Gascoigne Road eastbound): Cross-Harbour Tunnel (紅隧) 14 min, Eastern Harbour Crossing (東隧) 13 min; fastest: Eastern Harbour Crossing (東隧)")
+assert.ok(fastestLine([leg("CH", 9), leg("EH", 9), leg("WH", 12)])?.endsWith("; fastest: Cross-Harbour Tunnel (紅隧) and Eastern Harbour Crossing (東隧)"))
+assert.deepEqual(fastestCodes(fastestLine([leg("CH", 9), leg("EH", 9), leg("WH", 12)]) ?? ""), ["CH", "EH"])
+assert.deepEqual(fastestCodes("Harbour crossing times from X (Y): Cross-Harbour Tunnel (紅隧) 7 min"), [], "no fastest item")
 
 console.log("ask facts ok")
 

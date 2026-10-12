@@ -65,7 +65,10 @@ export function askFacts(input: AskInput): string {
   const crossingLines = input.starts.flatMap((start) => {
     const legs = start.legs.filter((leg) => leg.code in TUNNEL && leg.minutes != null)
     if (legs.length === 0) return []
-    return [`Harbour crossing times from ${start.nameTc} (${start.name}): ${legs.map((leg) => `${TUNNEL[leg.code]} ${leg.minutes} min`).join(", ")}`]
+    // Worked out here, not by the model: it once called the 14-minute tunnel fastest beside a 13-minute one.
+    const least = Math.min(...legs.map((leg) => leg.minutes as number))
+    const fastest = legs.filter((leg) => leg.minutes === least).map((leg) => TUNNEL[leg.code]).join(" and ")
+    return [`Harbour crossing times from ${start.nameTc} (${start.name}): ${legs.map((leg) => `${TUNNEL[leg.code]} ${leg.minutes} min`).join(", ")}; fastest: ${fastest}`]
   })
   lines.push(...(crossingLines.length > 0 ? crossingLines : ["Harbour crossing times: no reading"]))
   const bar = input.starts.find((start) => start.id === input.barStartId)
@@ -107,6 +110,13 @@ export function askFacts(input: AskInput): string {
     }
   }
   return lines.join("\n")
+}
+
+// The tunnel codes a crossing-times line names fastest; empty when the line has no fastest item.
+export function fastestCodes(line: string): string[] {
+  const item = line.split("; fastest: ")[1]
+  if (!item) return []
+  return Object.keys(TUNNEL).filter((code) => item.includes(TUNNEL[code]))
 }
 
 // The top bar's start, when the answer names a different start and not the bar's, so the box
