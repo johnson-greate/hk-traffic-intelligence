@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { askFacts, fastestCodes, otherSign } from "./ask-facts.ts"
+import { askFacts, fastestCodes, otherSign, tripLine } from "./ask-facts.ts"
 import type { AskInput } from "./ask-facts.ts"
 
 const leg = (code: string, minutes: number | null) => ({ code, name: code, nameTc: code, minutes, colour: "green" as const })
@@ -101,3 +101,19 @@ assert.equal(otherSign("From Gascoigne Road eastbound, the EHC is fastest.", sta
 assert.equal(otherSign("羅湖現時正常。", starts, "K02"), null, "no start named")
 assert.equal(otherSign("啓祥道西行近九龍灣消防總局最快。", starts, null), null, "bar sign unknown")
 console.log("ask facts other sign ok")
+
+// Which side of the harbour each named place is on is a lookup, done in code: the model once
+// put Causeway Bay on the Kowloon side and said a trip to Mong Kok needs no tunnel.
+assert.equal(
+  tripLine("I am in Causeway Bay and want to drive to Mong Kok. Which tunnel is fastest?"),
+  "This trip, fixed: 銅鑼灣 Causeway Bay is on Hong Kong Island, 旺角 Mong Kok is on the Kowloon side, so a trip between them crosses the harbour",
+)
+assert.match(tripLine("我而家喺新蒲崗想去銅鑼灣邊個最快") ?? "", /新蒲崗 San Po Kong is on the Kowloon side.*crosses the harbour/)
+assert.match(tripLine("我在新蒲岗，想去铜锣湾，哪条隧道最快？") ?? "", /crosses the harbour/, "Simplified names are found")
+assert.match(tripLine("由旺角去觀塘") ?? "", /does not cross the harbour/)
+assert.equal(tripLine("紅隧而家要幾耐？"), null, "no places named")
+assert.equal(tripLine("我在銅鑼灣，過海走哪條隧道最快？"), null, "one place is not a trip")
+assert.equal(tripLine("我喺灣仔南，紅隧幾耐？"), null, "灣仔南 is one place, not 灣仔 and 灣仔南")
+assert.match(tripLine("由灣仔南去旺角") ?? "", /^This trip, fixed: 灣仔南 south Wan Chai is on Hong Kong Island, 旺角/)
+assert.ok(askFacts(input, "由銅鑼灣去旺角").includes("This trip, fixed: 銅鑼灣"))
+assert.ok(!askFacts(input).includes("This trip"), "no trip line without a question")

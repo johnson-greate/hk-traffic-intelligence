@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
   try {
     const input = askInput(await readCityFeeds(load, true), centre)
-    const facts = askFacts(input)
+    const facts = askFacts(input, question)
     // Jev checks answers with a TypeSafe key, or an OpenRouter key as AGENTS.md describes.
     const guard = keys.typesafe ? jevGuard(keys.typesafe) : keys.openrouter ? jevGuard(keys.openrouter, fetch, "openrouter") : null
     const result = await answerQuestion(question, facts, locale, keys, undefined, guard)

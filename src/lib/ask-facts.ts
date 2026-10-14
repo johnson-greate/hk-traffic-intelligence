@@ -54,7 +54,34 @@ const START_AREAS: Record<string, { side: string; areas: string }> = {
   K08: { side: KOWLOON, areas: "九龍灣 Kowloon Bay, 觀塘 Kwun Tong, 牛頭角 Ngau Tau Kok, 藍田 Lam Tin, 新蒲崗 San Po Kong, 黃大仙 Wong Tai Sin, 將軍澳 Tseung Kwan O, 西貢 Sai Kung" },
 }
 
-export function askFacts(input: AskInput): string {
+// Traditional to Simplified for the characters in the district names above, so a zh-CN
+// question finds them too.
+const SIMPLIFIED: Record<string, string> = {
+  灣: "湾", 鐘: "钟", 環: "环", 銅: "铜", 鑼: "锣", 黃: "黄", 淺: "浅", 馬: "马", 鰂: "鲗", 魚: "鱼",
+  紅: "红", 龍: "龙", 門: "门", 觀: "观", 頭: "头", 藍: "蓝", 崗: "岗", 將: "将", 貢: "贡",
+}
+
+// The districts a question names and the side of the harbour each is on. Worked out here, not by
+// the model: it once put Causeway Bay on the Kowloon side and said a trip to Mong Kok needs no tunnel.
+export function tripLine(question: string): string | null {
+  const named: { district: string; side: string }[] = []
+  for (const { side, areas } of Object.values(START_AREAS)) {
+    for (const district of areas.split(", ")) {
+      const [tc, ...english] = district.split(" ")
+      const sc = [...tc].map((char) => SIMPLIFIED[char] ?? char).join("")
+      const en = new RegExp(`\\b${english.join(" ")}\\b`, "i")
+      if (question.includes(tc) || question.includes(sc) || en.test(question)) named.push({ district, side })
+    }
+  }
+  // 灣仔南 also contains 灣仔: keep only the longer name.
+  const places = named.filter((place) => !named.some((other) => other !== place && other.district.includes(place.district.split(" ")[0])))
+  if (places.length < 2) return null
+  const text = places.map((place) => `${place.district} is on ${place.side}`).join(", ")
+  const crosses = places.some((place) => place.side === ISLAND) && places.some((place) => place.side !== ISLAND)
+  return `This trip, fixed: ${text}, so a trip between them ${crosses ? "crosses" : "does not cross"} the harbour`
+}
+
+export function askFacts(input: AskInput, question = ""): string {
   const lines = [`Time: ${new Date(input.at.getTime() + HK_OFFSET_MS).toISOString().slice(0, 16).replace("T", " ")} Hong Kong time`]
   const summary = input.traffic?.ok ? input.traffic.summary : null
   lines.push(
@@ -81,6 +108,8 @@ export function askFacts(input: AskInput): string {
       lines.push(`Reference, fixed: ${district} is on ${area.side}; nearest start ${start.nameTc}`)
     }
   }
+  const trip = tripLine(question)
+  if (trip) lines.push(trip)
   const jams = input.traffic?.ok ? jammedRoads(input.traffic.corridors, 8) : []
   lines.push(
     jams.length > 0
