@@ -55,12 +55,17 @@ function recognitionClass(): RecognitionClass | null {
   return scope.SpeechRecognition ?? scope.webkitSpeechRecognition ?? null
 }
 
+// Chrome on phones has the API but heard nothing in testing, so touch screens get no button.
+function canListen(): boolean {
+  return recognitionClass() !== null && !window.matchMedia("(pointer: coarse)").matches
+}
+
 const subscribe = () => () => {}
 
 export function VoiceInput(props: { locale: Locale; value: string; max: number; onChange: (text: string) => void }) {
   const { locale, value, max, onChange } = props
   const label = LABEL[locale]
-  const supported = useSyncExternalStore(subscribe, () => recognitionClass() !== null, () => false)
+  const supported = useSyncExternalStore(subscribe, canListen, () => false)
   const [state, setState] = useState<"idle" | "listening" | "finishing">("idle")
   const [denied, setDenied] = useState(false)
   const recognition = useRef<Recognition | null>(null)
@@ -74,7 +79,7 @@ export function VoiceInput(props: { locale: Locale; value: string; max: number; 
     [],
   )
 
-  // Safari and Firefox have no dependable recognition, so they get no button.
+  // Safari, Firefox and phones get no button.
   if (!supported) return null
 
   const finish = () => {
