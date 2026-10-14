@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react"
 import { useI18n } from "@/components/locale"
+import { VoiceInput } from "@/components/voice-input"
 import type { Locale } from "@/lib/i18n"
 
 type AskReply =
@@ -96,7 +97,7 @@ export function AskBox(props: { centre: { lng: number; lat: number } | null }) {
 
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
-      <form onSubmit={submit} className="flex gap-1.5">
+      <form onSubmit={submit} className="flex flex-wrap gap-1.5">
         <label className="sr-only" htmlFor="ask-ai">
           {label.ask}
         </label>
@@ -109,6 +110,7 @@ export function AskBox(props: { centre: { lng: number; lat: number } | null }) {
           placeholder={label.placeholder}
           className="min-w-0 flex-1 border border-white/15 bg-black/40 px-1.5 py-1 text-sm text-white placeholder:text-zinc-500"
         />
+        <VoiceInput locale={locale} value={question} max={MAX_QUESTION} onChange={setQuestion} />
         <button
           type="submit"
           disabled={busy || !question.trim()}
