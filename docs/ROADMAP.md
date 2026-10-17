@@ -54,6 +54,7 @@
 | --- | --- | --- | --- | --- |
 | ✅ | AI 城市簡報 | 右上角卡片，一至三句講全城交通（繁／簡／英）。DeepSeek 主力、Claude Haiku 4.5 後備；每 15 分鐘一次、全體訪客共用。經 `SELF` binding 讀數據以避開免費計劃子請求上限 | 中 | [#13](https://github.com/johnson-greate/hk-traffic-intelligence/pull/13)、[#14](https://github.com/johnson-greate/hk-traffic-intelligence/pull/14)、[#15](https://github.com/johnson-greate/hk-traffic-intelligence/pull/15)、[#16](https://github.com/johnson-greate/hk-traffic-intelligence/pull/16) |
 | ✅ | 自然語言問答 | AI 簡報卡內的「問 AI」：只用即時數據回答，附引用的事實；程式核對引文、Jev（TypeSafe）核對有沒有額外說法；拒答無關或數據沒有的問題 | 大 | [#20](https://github.com/johnson-greate/hk-traffic-intelligence/pull/20) |
+| ✅ | 語音輸入 | 問 AI 框旁邊嘅「講」掣，用瀏覽器 Web Speech API，語言跟介面，講完 1.5 秒自動停，唔自動送出。只喺電腦版 Chrome 顯示（手機實測收唔到音） | 細 | [#33](https://github.com/johnson-greate/hk-traffic-intelligence/pull/33)、[#34](https://github.com/johnson-greate/hk-traffic-intelligence/pull/34) |
 
 ## 部署
 
@@ -76,5 +77,8 @@
 - 原作者喺 2026-10-04 重寫咗 history（force push）。2026-10-12 已用一次性 graft 同步（PR #27、#29），以後直接 `git merge upstream/main`，PR 要用 merge commit。佢嘅 code 通常過唔到我哋 CI（lint、`next typegen && tsc`），每次同步要喺 merge 補型別修正。佢刪咗嘅 `deploy-main.mjs` 等工具，我哋用 `git add -f` 繼續保留。
 - 新 Worker 啱啱啟動、快取未有數據時，問答讀唔到隧道數據，會用另一個起點作答，而且冇「頂部列顯示緊另一個路口」嘅提示。
 - `hktraffic.brian-361.workers.dev` 喺設定咗自訂域名之後被 Cloudflare 自動停用（error 1042），只可用 traffic.resource.hk。
-- 問答會揀錯「最快」隧道：2026-10-10 測試答「紅隧 14 分最快」，但引用嘅數據入面東隧係 13 分。係模型判斷錯，未修。
+- ~~問答會揀錯「最快」隧道~~：2026-10-12 改由程式計最快嗰條，答錯就拒絕（PR #31）。
+- ~~問答「由 A 去 B」連目的地起點都答、多咗句頂部列說明、將銅鑼灣當九龍~~：2026-10-14 改由程式查地區喺港島定九龍，只用出發地起點（PR #35）。
+- 簡體介面嘅問答答案用簡體起點名，頂部列說明（`otherSign` 用繁體名比對）唔會出現。
+- 語音輸入：手機 Chrome 實測收唔到音，所以觸控裝置唔顯示個掣；Firefox、Safari 都冇。
 - 管制站：入境處 2026-10-12 將落馬洲（LMC）換成皇岗（HGP），舊 code 因為要求所有站齊晒，成個功能壞咗，同步 Keith 嘅修正之後已經回復。之後入境處再加減站，都可能再壞。
